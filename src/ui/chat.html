@@ -11,106 +11,37 @@
     <svg class="spark" viewBox="0 0 24 24" aria-hidden="true"><g class="rays"></g></svg>
     <div class="titles">
       <div class="title">Claude</div>
-      <div class="status" id="status">Screen off</div>
+      <div class="status-wrap"><span class="status" id="status">Screen off</span></div>
     </div>
     <button class="chip" id="watch" title="Watch my screen" aria-pressed="false">
       <span class="dot" aria-hidden="true"></span><span id="watchLabel">Screen off</span>
     </button>
-    <button class="icon" id="share" title="Share screen now">
-      <svg viewBox="0 0 24 24"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.4-2h5l1.4 2h1.6A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.4"/></svg>
-    </button>
-    <button class="icon" id="rewind" title="Share Rewind — the last few minutes of your screen">
-      <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/><path d="M12 8v4.5l3 1.8"/></svg>
-      <span class="badge" id="rewindCount"></span>
-    </button>
-    <button class="icon" id="newChat" title="New chat">
-      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-    </button>
-    <button class="icon" id="more" title="More" aria-expanded="false">
-      <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>
-    </button>
-    <button class="icon" id="collapse" title="Shrink to pill">
-      <svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg>
-    </button>
+    <div class="tools">
+      <button class="icon" id="share" title="Share screen now">
+        <svg viewBox="0 0 24 24"><path d="M4 8.6A2.6 2.6 0 0 1 6.6 6h1.5l1.5-2h4.8l1.5 2h1.5A2.6 2.6 0 0 1 20 8.6v7.8a2.6 2.6 0 0 1-2.6 2.6H6.6A2.6 2.6 0 0 1 4 16.4z"/><circle cx="12" cy="12.4" r="3.3"/></svg>
+      </button>
+      <button class="icon" id="rewind" title="Share Rewind: the last few minutes of your screen">
+        <svg viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4h4"/><path d="M12 8.2v4.2l2.8 1.7"/></svg>
+        <span class="badge" id="rewindCount"></span>
+      </button>
+      <button class="icon" id="newChat" title="New chat">
+        <svg viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></svg>
+      </button>
+      <button class="icon" id="more" title="Settings" aria-expanded="false">
+        <svg viewBox="0 0 24 24"><path d="M5 7.5h9M18 7.5h1M5 16.5h1M10 16.5h9"/><circle cx="16" cy="7.5" r="2"/><circle cx="8" cy="16.5" r="2"/></svg>
+      </button>
+      <button class="icon" id="collapse" title="Shrink to pill">
+        <svg viewBox="0 0 24 24"><path d="M9.5 4.5v5h-5M14.5 19.5v-5h5M9.5 9.5l-5-5M14.5 14.5l5 5"/></svg>
+      </button>
+    </div>
+    <span class="watchline" aria-hidden="true"></span>
   </header>
 
   <div id="banner" class="banner" hidden>
     <span id="bannerText"></span>
     <button id="bannerAction" class="link"></button>
-    <button id="bannerClose" class="icon small" title="Dismiss"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    <button id="bannerClose" class="icon small" title="Dismiss"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></button>
   </div>
-
-  <section id="drawer" class="drawer" hidden>
-    <div class="group">
-      <h3>Chat</h3>
-      <div class="row buttons">
-        <button data-act="recents">All chats</button>
-        <button data-act="back">Back</button>
-        <button data-act="browser">Open in browser</button>
-        <button data-act="clip">Open link from clipboard</button>
-      </div>
-      <form id="linkForm" class="row">
-        <input id="linkInput" type="url" placeholder="Paste a claude.ai chat link…" spellcheck="false">
-        <button type="submit">Open</button>
-      </form>
-    </div>
-
-    <div class="group">
-      <h3>Sight</h3>
-      <label class="row toggle"><span>Watch my screen <small>every message carries a screenshot</small></span><input type="checkbox" data-set="watching"></label>
-      <label class="row"><span>Which screen</span>
-        <select data-set="captureDisplay">
-          <option value="cursor">The one my mouse is on</option>
-          <option value="primary">Main display</option>
-          <option value="all">All displays</option>
-        </select>
-      </label>
-      <label class="row"><span>Detail</span>
-        <select data-set="captureMaxEdge" data-num>
-          <option value="1280">Light (1280px)</option>
-          <option value="1920">Sharp (1920px)</option>
-          <option value="2560">Max (2560px)</option>
-        </select>
-      </label>
-      <label class="row toggle"><span>Rewind memory <small>last few minutes, RAM only, wiped when off</small></span><input type="checkbox" data-set="rewindEnabled"></label>
-      <label class="row"><span>Rewind snapshot every</span>
-        <select data-set="rewindIntervalSec" data-num>
-          <option value="10">10 s</option><option value="20">20 s</option><option value="30">30 s</option><option value="60">1 min</option>
-        </select>
-      </label>
-      <label class="row toggle" id="hideSelfRow"><span>Hide The Pill from screenshots</span><input type="checkbox" data-set="hideSelfFromCapture"></label>
-      <p class="note" id="sightNote"></p>
-    </div>
-
-    <div class="group">
-      <h3>Window</h3>
-      <label class="row toggle"><span>Keep chat on top of everything</span><input type="checkbox" data-set="pinned"></label>
-      <label class="row toggle"><span>Side-panel mode <small>dock to the screen edge instead of opening where the pill is</small></span><input type="checkbox" id="dockToggle"></label>
-      <label class="row" id="opacityRow"><span>Opacity</span><input type="range" min="0.4" max="1" step="0.05" data-set="opacity" data-num></label>
-      <label class="row toggle"><span>Reopen my last chat on start</span><input type="checkbox" data-set="restoreLastChat"></label>
-      <label class="row toggle" id="loginRow"><span>Launch at login</span><input type="checkbox" data-set="launchAtLogin"></label>
-    </div>
-
-    <div class="group">
-      <h3>Send a browser chat to The Pill</h3>
-      <p class="note">Drag this to your bookmarks bar. On any claude.ai chat, click it and that chat opens here, minimised beside your work.</p>
-      <div class="row buttons">
-        <a id="bookmarklet" class="bookmarklet" draggable="true">→ Send to Pill</a>
-        <button data-act="copyBookmarklet">Copy bookmarklet</button>
-      </div>
-    </div>
-
-    <div class="group">
-      <h3>Shortcuts</h3>
-      <ul class="keys" id="keys"></ul>
-    </div>
-
-    <div class="row buttons footer">
-      <button data-act="reload">Reload Claude</button>
-      <button data-act="quit" class="danger">Quit The Pill</button>
-      <span class="version" id="version"></span>
-    </div>
-  </section>
 
   <canvas id="compositor" hidden></canvas>
   <script src="spark.js"></script>

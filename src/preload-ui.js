@@ -37,6 +37,8 @@ contextBridge.exposeInMainWorld('pill', {
   collapse: () => ipcRenderer.invoke('ui:collapse'),
   toggleDock: () => ipcRenderer.invoke('ui:toggle-dock'),
   togglePin: () => ipcRenderer.invoke('ui:toggle-pin'),
+  toggleSettings: (open) => ipcRenderer.invoke('ui:toggle-settings', open),
+  onSettingsAnim: on('ui:settings'),
   setOverlay: (px) => ipcRenderer.send('ui:overlay', px),
   pillMove: (x, y) => ipcRenderer.send('pill:move', { x, y }),
   pillDragEnd: () => ipcRenderer.send('pill:drag-end'),

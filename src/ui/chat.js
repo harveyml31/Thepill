@@ -1,12 +1,10 @@
 /* global pill */
 const $ = (id) => document.getElementById(id);
 const statusEl = $('status');
-const drawer = $('drawer');
 const banner = $('banner');
 let state = null;
 let statusTimer = null;
-
-const BOOKMARKLET = "javascript:(()=>{location.href='thepill://open?url='+encodeURIComponent(location.href)})()";
+let shownText = '';
 
 function baseStatus() {
   if (!state) return '';
@@ -14,22 +12,28 @@ function baseStatus() {
   return state.rewindCount ? `Watching your screen · Rewind ${state.rewindCount}` : 'Watching your screen';
 }
 
-function setStatus(text, kind = 'info', ms = 3500) {
-  clearTimeout(statusTimer);
-  statusEl.className = 'status';
-  if (!text) { statusTimer = null; statusEl.textContent = baseStatus(); return; }
-  statusEl.textContent = text;
-  statusEl.title = text;
-  statusEl.classList.add(kind);
-  statusTimer = setTimeout(() => { statusTimer = null; statusEl.className = 'status'; statusEl.textContent = baseStatus(); }, ms);
+/** Swap the status line with a short slide so changes are noticed but quiet. */
+function showStatus(text, kind = '') {
+  if (text === shownText && statusEl.dataset.kind === kind) return;
+  shownText = text;
+  statusEl.dataset.kind = kind;
+  statusEl.classList.add('out');
+  setTimeout(() => {
+    statusEl.textContent = text;
+    statusEl.title = text;
+    statusEl.className = `status in ${kind}`;
+    requestAnimationFrame(() => requestAnimationFrame(() => { statusEl.className = `status ${kind}`; }));
+  }, 140);
 }
 
-function syncOverlay() {
-  let h = 0;
-  if (!banner.hidden) h += banner.offsetHeight;
-  if (!drawer.hidden) h += drawer.offsetHeight;
-  pill.setOverlay(h);
+function setStatus(text, kind = 'info', ms = 3500) {
+  clearTimeout(statusTimer);
+  if (!text) { statusTimer = null; showStatus(baseStatus()); return; }
+  showStatus(text, kind);
+  statusTimer = setTimeout(() => { statusTimer = null; showStatus(baseStatus()); }, ms);
 }
+
+function syncOverlay() { pill.setOverlay(banner.hidden ? 0 : banner.offsetHeight + 10); }
 
 function showBanner(text, action) {
   $('bannerText').textContent = text;
@@ -49,36 +53,10 @@ function render(s) {
   $('watchLabel').textContent = s.watching ? 'Watching' : 'Screen off';
   $('rewind').hidden = !s.rewindEnabled;
   $('rewind').disabled = !s.watching || !s.rewindCount;
-  $('rewindCount').textContent = s.watching && s.rewindCount ? String(s.rewindCount) : '';
-  if (!statusTimer) statusEl.textContent = baseStatus();
-
-  for (const input of document.querySelectorAll('[data-set]')) {
-    const v = s.settings[input.dataset.set];
-    if (input.type === 'checkbox') input.checked = !!v;
-    else if (document.activeElement !== input) input.value = String(v);
-  }
-  $('dockToggle').checked = !!s.docked;
-  $('opacityRow').hidden = s.platform === 'linux';
-  $('loginRow').hidden = s.platform === 'linux';
-  $('hideSelfRow').hidden = s.platform === 'linux';
-  $('sightNote').textContent = s.platform === 'linux'
-    ? (s.wayland ? 'Wayland: your desktop may ask you to approve each screenshot. An X11 session avoids that.' : 'Linux can’t exclude The Pill from screenshots, so the panel may appear in them.')
-    : (s.platform === 'darwin' ? 'macOS asks once for Screen Recording permission (System Settings → Privacy & Security).' : '');
-  const names = { toggleChat: 'Open / shrink Claude', shareScreen: 'Share screen now', toggleWatching: 'Watching on / off' };
-  $('keys').replaceChildren(...Object.entries(s.shortcuts).map(([k, v]) => {
-    const li = document.createElement('li');
-    const name = document.createElement('span'); name.textContent = names[k] || k;
-    const kbd = document.createElement('kbd'); kbd.textContent = v.keys;
-    li.append(name, v.ok ? kbd : Object.assign(document.createElement('span'), { className: 'bad', textContent: `${v.keys} (taken by another app)` }));
-    return li;
-  }));
-  $('version').textContent = `v${s.version}`;
-}
-
-function toggleDrawer(open = drawer.hidden) {
-  drawer.hidden = !open;
-  $('more').setAttribute('aria-expanded', String(open));
-  syncOverlay();
+  const count = s.watching && s.rewindCount ? String(s.rewindCount) : '';
+  if ($('rewindCount').textContent !== count) $('rewindCount').textContent = count;
+  $('more').setAttribute('aria-expanded', String(!!s.settingsOpen));
+  if (!statusTimer) showStatus(baseStatus());
 }
 
 // toolbar
@@ -86,8 +64,8 @@ $('watch').onclick = () => pill.toggleWatching();
 $('share').onclick = () => { setStatus('Taking a screenshot…', 'capture'); pill.shareScreen(); };
 $('rewind').onclick = () => { setStatus('Building Rewind…', 'capture'); pill.shareRewind(); };
 $('newChat').onclick = () => pill.newChat();
-$('more').onclick = () => toggleDrawer();
-$('collapse').onclick = () => { toggleDrawer(false); pill.collapse(); };
+$('more').onclick = () => pill.toggleSettings();
+$('collapse').onclick = () => pill.collapse();
 $('bannerClose').onclick = () => { banner.hidden = true; syncOverlay(); };
 $('bannerAction').onclick = () => {
   const id = $('bannerAction').dataset.id;
@@ -96,47 +74,17 @@ $('bannerAction').onclick = () => {
   banner.hidden = true; syncOverlay();
 };
 
-// drawer
-const acts = {
-  recents: () => { pill.recents(); toggleDrawer(false); },
-  back: () => pill.back(),
-  browser: () => pill.openInBrowser(),
-  clip: async () => { if (await pill.linkFromClipboard()) toggleDrawer(false); },
-  reload: () => pill.reload(),
-  quit: () => pill.quit(),
-  copyBookmarklet: async () => { await pill.copyText(BOOKMARKLET); setStatus('Bookmarklet copied — add it as a bookmark’s URL', 'capture'); },
-};
-drawer.addEventListener('click', (e) => {
-  const b = e.target.closest('[data-act]');
-  if (b && acts[b.dataset.act]) acts[b.dataset.act]();
-});
-drawer.addEventListener('change', (e) => {
-  const input = e.target;
-  if (input.id === 'dockToggle') { pill.toggleDock(); return; }
-  const key = input.dataset.set;
-  if (!key) return;
-  let v = input.type === 'checkbox' ? input.checked : input.value;
-  if ('num' in input.dataset) v = Number(v);
-  pill.setSettings({ [key]: v });
-});
-$('opacityRow').querySelector('input').addEventListener('input', (e) => pill.setSettings({ opacity: Number(e.target.value) }));
-$('linkForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const ok = await pill.openLink($('linkInput').value);
-  if (ok) { $('linkInput').value = ''; toggleDrawer(false); } else setStatus('That isn’t a claude.ai link', 'warn');
-});
-const bm = $('bookmarklet');
-bm.href = BOOKMARKLET;
-bm.addEventListener('click', (e) => e.preventDefault());
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !drawer.hidden) toggleDrawer(false); });
-new ResizeObserver(() => syncOverlay()).observe(drawer);
-
 // main -> ui
 pill.getState().then(render);
 pill.onState(render);
 pill.onToast((t) => {
   if (!t) return;
-  if (t.kind === 'open-settings') { toggleDrawer(true); return; }
+  if (t.kind === 'open-settings') { pill.toggleSettings(true); return; }
+  if (t.kind === 'shown') {
+    document.body.classList.remove('enter'); void document.body.offsetWidth; document.body.classList.add('enter');
+    setTimeout(() => document.body.classList.remove('enter'), 700);
+    return;
+  }
   if (t.kind === 'clear') { setStatus(''); return; }
   if (t.action) showBanner(t.text, t.action);
   else setStatus(t.text, t.kind, t.kind === 'warn' ? 6000 : 3500);
@@ -183,15 +131,18 @@ pill.onCompose(async ({ id, frames, now }) => {
       g.drawImage(img, x + (cw - w) / 2, y + (ch - h) / 2, w, h);
       const t = new Date(frames[i].at);
       const label = `${i + 1}/${n} · ${t.toLocaleTimeString()} · ${i === n - 1 ? 'now' : ago(now - frames[i].at)}`;
-      g.font = `600 ${Math.round(cw / 34)}px system-ui, sans-serif`;
+      const fs = Math.round(cw / 40);
+      g.font = `600 ${fs}px system-ui, sans-serif`;
+      const pad = Math.round(fs * 0.55);
       const tw = g.measureText(label).width;
-      const pad = Math.round(cw / 80);
-      const lh = Math.round(cw / 34) + pad * 2;
-      g.fillStyle = 'rgba(0,0,0,0.72)';
-      g.fillRect(x, y, tw + pad * 2, lh);
+      const lh = fs + pad * 2;
+      g.fillStyle = 'rgba(20,20,19,0.78)';
+      g.beginPath();
+      g.roundRect(x + pad, y + pad, tw + pad * 2, lh, lh / 2);
+      g.fill();
       g.fillStyle = '#fff';
       g.textBaseline = 'middle';
-      g.fillText(label, x + pad, y + lh / 2);
+      g.fillText(label, x + pad * 2, y + pad + lh / 2);
     });
     pill.composeDone(id, c.toDataURL('image/jpeg', 0.85));
   } catch (err) {

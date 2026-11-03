@@ -145,7 +145,7 @@ app.whenReady().then(async () => {
     const p0 = I.pillWin.getBounds();
     await I.setPillMode('bar'); await sleep(400);
     const bar = I.pillWin.getBounds();
-    check('click pill -> prompt bar grows in place', bar.width === 500 && bar.x + bar.width === p0.x + p0.width && bar.y === p0.y, JSON.stringify({ p0, bar }));
+    check('click pill -> prompt bar grows in place', bar.width > p0.width + 200 && bar.x + bar.width === p0.x + p0.width && bar.y === p0.y, JSON.stringify({ p0, bar }));
     await shot('desktop-bar.png');
     fs.writeFileSync(path.join(OUT, 'pill-bar.png'), (await I.pillWin.webContents.capturePage()).toPNG());
     const before = (await sent(wc)).length;
@@ -162,7 +162,7 @@ app.whenReady().then(async () => {
     const moved = I.chatWin.getBounds();
     I.collapse(); await sleep(400);
     const p1 = I.pillWin.getBounds();
-    check('collapse -> pill returns at the chat’s corner', p1.width === 172 && p1.x + p1.width === moved.x + moved.width && p1.y + p1.height === moved.y + moved.height, JSON.stringify({ moved, p1 }));
+    check('collapse -> pill returns at the chat’s corner', p1.width === p0.width && p1.x + p1.width === moved.x + moved.width && p1.y + p1.height === moved.y + moved.height, JSON.stringify({ moved, p1 }));
 
     // Screenshots of the whole desktop for visual review
     await shot('desktop-chat.png');

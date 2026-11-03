@@ -11,7 +11,7 @@
 const path = require('path');
 const {
   app, BrowserWindow, WebContentsView, ipcMain, globalShortcut, screen, Tray, Menu,
-  nativeImage, shell, clipboard, session, systemPreferences, powerMonitor,
+  nativeImage, shell, clipboard, session, systemPreferences, powerMonitor, nativeTheme,
 } = require('electron');
 const { Store } = require('./store');
 const { captureDisplays, Rewind, stamp } = require('./capture');
@@ -25,10 +25,11 @@ const OVERRIDE_URL = process.env.PILL_CLAUDE_URL || null; // for testing against
 const CLAUDE_ORIGIN = 'https://claude.ai';
 const PARTITION = 'persist:claude';
 const PROTOCOL = 'thepill';
-const TOOLBAR_H = 44;
-const PILL_W = 172;  // compact pill
-const BAR_W = 500;   // pill stretched into a prompt bar
-const PILL_H = 52;
+const TOOLBAR_H = 48;
+const SETTINGS_W = 372;
+const PILL_W = 180;  // compact pill (capsule is 164x44; the rest is room for its shadow)
+const BAR_W = 516;   // pill stretched into a prompt bar
+const PILL_H = 60;
 const CHAT_SIZE = { width: 440, height: 640 };
 
 const SHORTCUTS = {
@@ -45,6 +46,9 @@ let rewind;
 let pillWin = null;
 let chatWin = null;
 let claudeView = null;
+let settingsView = null;
+let settingsOpen = false;
+let settingsHideTimer = null;
 let tray = null;
 let quitting = false;
 let overlayPx = 0;
@@ -168,6 +172,8 @@ function uiState() {
     rewindCount: rewind ? rewind.frames.length : 0,
     pinned: s.pinned,
     docked: s.docked,
+    settingsOpen,
+    anchor: pillWin && cornerOf(pillWin.getBounds()).right ? 'right' : 'left',
     pillMode,
     opacity: s.opacity,
     chatOpen: !!(chatWin && chatWin.isVisible()),
@@ -186,6 +192,7 @@ function broadcastState() {
   const st = uiState();
   send(chatWin, 'ui:state', st);
   send(pillWin, 'ui:state', st);
+  if (settingsView) settingsView.webContents.send('ui:state', st);
   if (claudeView) claudeView.webContents.send('pill:state', { watching: st.watching });
   if (tray) {
     tray.setImage(trayImage(st.watching));
@@ -308,7 +315,7 @@ function createChat() {
   chatWin = new BrowserWindow({
     ...(b || CHAT_SIZE),
     minWidth: 340, minHeight: 360, frame: false, show: false, title: 'Claude — The Pill',
-    backgroundColor: '#262624', alwaysOnTop: !!store.get('pinned'), skipTaskbar: false,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#262624' : '#faf9f5', roundedCorners: true, alwaysOnTop: !!store.get('pinned'), skipTaskbar: false,
     icon: path.join(ASSETS, 'icon-256.png'), fullscreenable: false,
     webPreferences: { preload: path.join(__dirname, 'preload-ui.js'), contextIsolation: true, sandbox: true },
   });
@@ -327,6 +334,17 @@ function createChat() {
   });
   chatWin.contentView.addChildView(claudeView);
   setupClaudeView();
+
+  // Settings float over the chat in their own rounded view (added last, so it sits on top).
+  settingsView = new WebContentsView({
+    webPreferences: { preload: path.join(__dirname, 'preload-ui.js'), contextIsolation: true, sandbox: true },
+  });
+  settingsView.setBackgroundColor('#00000000');
+  if (typeof settingsView.setBorderRadius === 'function') settingsView.setBorderRadius(18);
+  settingsView.setVisible(false);
+  chatWin.contentView.addChildView(settingsView);
+  settingsView.webContents.loadFile(path.join(UI, 'settings.html'));
+  claudeView.webContents.on('focus', () => { if (settingsOpen) toggleSettings(false); });
   layoutView();
 
   let saveTimer;
@@ -361,6 +379,30 @@ function layoutView() {
   const [w, h] = chatWin.getContentSize();
   const top = TOOLBAR_H + overlayPx;
   claudeView.setBounds({ x: 0, y: top, width: w, height: Math.max(0, h - top) });
+  if (settingsOpen) layoutSettings();
+}
+
+function layoutSettings() {
+  if (!chatWin || !settingsView) return;
+  const [w, h] = chatWin.getContentSize();
+  const width = Math.min(SETTINGS_W, w - 16);
+  settingsView.setBounds({ x: w - width - 8, y: TOOLBAR_H + 4, width, height: Math.max(200, h - TOOLBAR_H - 12) });
+}
+
+function toggleSettings(open = !settingsOpen) {
+  if (!settingsView) return;
+  settingsOpen = !!open;
+  clearTimeout(settingsHideTimer);
+  if (settingsOpen) {
+    layoutSettings();
+    settingsView.setVisible(true);
+    settingsView.webContents.focus();
+    settingsView.webContents.send('ui:settings', { open: true });
+  } else {
+    settingsView.webContents.send('ui:settings', { open: false });
+    settingsHideTimer = setTimeout(() => { if (!settingsOpen) settingsView.setVisible(false); }, 240);
+  }
+  broadcastState();
 }
 
 function setupClaudeView() {
@@ -427,6 +469,21 @@ function waitForView(timeout = 20000) {
 }
 
 // ---------------------------------------------------------------- expand / collapse
+function fadeInChat() {
+  const target = IS_LINUX ? 1 : Math.min(1, Math.max(0.35, Number(store.get('opacity')) || 1));
+  send(chatWin, 'ui:toast', { kind: 'shown' });
+  if (IS_LINUX) { chatWin.show(); return; }
+  chatWin.setOpacity(0);
+  chatWin.show();
+  const start = Date.now();
+  const step = () => {
+    const t = Math.min(1, (Date.now() - start) / 170);
+    chatWin.setOpacity(target * (1 - Math.pow(1 - t, 3)));
+    if (t < 1) setTimeout(step, 12);
+  };
+  step();
+}
+
 function expand({ focus = true } = {}) {
   if (!chatWin) return;
   if (!chatWin.isVisible()) {
@@ -434,7 +491,7 @@ function expand({ focus = true } = {}) {
     const b = store.get('docked') ? defaultChatBounds(displayOf(pillWin)) : growFrom(pillWin.getBounds(), chatSize());
     chatWin.setBounds(b);
     layoutView();
-    chatWin.show();
+    fadeInChat();
   }
   if (focus) {
     chatWin.focus();
@@ -446,6 +503,7 @@ function expand({ focus = true } = {}) {
 }
 
 function collapse() {
+  if (settingsOpen) { settingsOpen = false; settingsView.setVisible(false); }
   if (chatWin && chatWin.isVisible()) {
     if (!store.get('docked')) {
       // Shrink back into a pill at the chat's corner (so if you moved the chat, the pill follows).
@@ -626,7 +684,7 @@ function buildMenu() {
     { type: 'separator' },
     { label: 'Keep chat on top', type: 'checkbox', checked: !!s.pinned, click: (m) => applySettings({ pinned: m.checked }) },
     ...(IS_LINUX ? [] : [{ label: 'Launch at login', type: 'checkbox', checked: !!s.launchAtLogin, click: (m) => applySettings({ launchAtLogin: m.checked }) }]),
-    { label: 'Settings…', click: () => { expand(); send(chatWin, 'ui:toast', { text: '', kind: 'open-settings' }); } },
+    { label: 'Settings…', click: () => { expand(); toggleSettings(true); } },
     { type: 'separator' },
     { label: 'Quit The Pill', role: 'quit' },
   ]);
@@ -687,6 +745,7 @@ function wireIpc() {
   ipcMain.handle('ui:expand', () => expand());
   ipcMain.handle('ui:collapse', () => collapse());
   ipcMain.handle('ui:toggle-dock', () => toggleDock());
+  ipcMain.handle('ui:toggle-settings', (_e, open) => toggleSettings(open === undefined ? undefined : !!open));
   ipcMain.handle('ui:toggle-pin', () => applySettings({ pinned: !store.get('pinned') }));
   ipcMain.handle('ui:quit', () => { quitting = true; app.quit(); });
   ipcMain.on('ui:overlay', (_e, px) => { overlayPx = Math.max(0, Math.min(2000, Number(px) || 0)); layoutView(); });
@@ -784,5 +843,5 @@ app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', (e) => { if (!quitting) e.preventDefault(); });
 
 module.exports = {
-  _internals: () => ({ submitPrompt, setPillMode, pillMode: () => pillMode, pillWin, chatWin, claudeView, store, rewind, expand, collapse, shareScreen, shareRewind, setWatching, uiState, toggleDock }),
+  _internals: () => ({ toggleSettings, settingsView: () => settingsView, submitPrompt, setPillMode, pillMode: () => pillMode, pillWin, chatWin, claudeView, store, rewind, expand, collapse, shareScreen, shareRewind, setWatching, uiState, toggleDock }),
 };

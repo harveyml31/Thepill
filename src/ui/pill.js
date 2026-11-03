@@ -1,12 +1,21 @@
 /* global pill */
-const el = document.getElementById('pill');
+const capsule = document.getElementById('pill');
 const sub = document.getElementById('sub');
 const eye = document.getElementById('eye');
 const cam = document.getElementById('cam');
+const send = document.getElementById('send');
 const prompt = document.getElementById('prompt');
+const body = document.body;
+const COMPACT_W = 164;
+const MORPH_MS = 340;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 let state = null;
 let subTimer = null;
 let includeScreen = false; // one-off "include my screen" for this question
+let morphing = false;
+
+const isBar = () => body.classList.contains('bar');
 
 function baseSub() {
   if (!state) return '';
@@ -15,21 +24,22 @@ function baseSub() {
 }
 
 function renderCam() {
-  const on = !!(state && state.watching) || includeScreen;
+  const watching = !!(state && state.watching);
+  const on = watching || includeScreen;
   cam.setAttribute('aria-pressed', String(on));
-  cam.disabled = !!(state && state.watching);
-  cam.title = state && state.watching
-    ? 'Watching is on — your screen is included'
-    : (includeScreen ? 'Your screen will be included — click to skip' : 'Include my screen with this question');
+  cam.disabled = watching;
+  cam.title = watching ? 'Watching is on, so your screen is included'
+    : (includeScreen ? 'Your screen will be included. Click to skip it' : 'Include my screen with this question');
   prompt.placeholder = on ? 'Ask Claude about your screen…' : 'Ask Claude…';
 }
 
 function render(s) {
   state = s;
-  el.classList.toggle('watching', !!s.watching);
+  capsule.classList.toggle('watching', !!s.watching);
+  body.classList.toggle('anchor-left', s.anchor === 'left');
   eye.title = s.watching ? 'Stop watching my screen' : 'Watch my screen';
   eye.setAttribute('aria-pressed', String(!!s.watching));
-  document.body.classList.toggle('bar', s.pillMode === 'bar');
+  if (!morphing) body.classList.toggle('bar', s.pillMode === 'bar');
   if (!subTimer) sub.textContent = baseSub();
   renderCam();
 }
@@ -40,22 +50,45 @@ function say(text, ms = 2200) {
   subTimer = setTimeout(() => { subTimer = null; sub.textContent = baseSub(); }, ms);
 }
 
-function openBar() {
-  document.body.classList.add('bar');
-  pill.setPillMode('bar');
-  setTimeout(() => prompt.focus(), 30);
+const nextFrame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+const wait = (ms) => new Promise((r) => setTimeout(r, reduced ? 0 : ms));
+
+// The window resizes instantly; the capsule animates its width inside the (transparent) window.
+async function openBar() {
+  if (isBar() || morphing) return;
+  morphing = true;
+  capsule.style.transition = 'none';
+  capsule.style.width = `${COMPACT_W}px`;
+  await pill.setPillMode('bar');
+  await nextFrame();
+  capsule.style.transition = '';
+  body.classList.add('bar');
+  capsule.style.width = '';
+  prompt.focus();
+  await wait(MORPH_MS);
+  morphing = false;
 }
-function closeBar() {
-  document.body.classList.remove('bar');
-  includeScreen = false; renderCam();
-  pill.setPillMode('pill');
+
+async function closeBar() {
+  if (!isBar() || morphing) return;
+  morphing = true;
+  capsule.style.width = `${COMPACT_W}px`;
+  body.classList.remove('bar');
+  await wait(MORPH_MS);
+  await pill.setPillMode('pill');
+  capsule.style.width = '';
+  includeScreen = false;
+  prompt.value = '';
+  send.disabled = true;
+  renderCam();
+  morphing = false;
 }
 
 pill.getState().then(render);
 pill.onState(render);
 pill.onFlash(() => {
-  el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
-  say('Seeing screen…', 1400);
+  capsule.classList.remove('flash'); void capsule.offsetWidth; capsule.classList.add('flash');
+  say('Seeing your screen…', 1400);
 });
 pill.onToast((t) => {
   if (!t) return;
@@ -63,52 +96,56 @@ pill.onToast((t) => {
   if (t.text && t.kind === 'watch') say('Watching on');
 });
 
-for (const b of [eye, cam, document.getElementById('open'), document.getElementById('close')]) {
-  b.addEventListener('pointerdown', (e) => e.stopPropagation());
-}
+for (const b of [eye, cam, send, document.getElementById('open')]) b.addEventListener('pointerdown', (e) => e.stopPropagation());
 eye.addEventListener('click', (e) => { e.stopPropagation(); pill.toggleWatching(); });
 cam.addEventListener('click', (e) => { e.stopPropagation(); includeScreen = !includeScreen; renderCam(); prompt.focus(); });
 document.getElementById('open').addEventListener('click', (e) => { e.stopPropagation(); pill.expand(); });
-document.getElementById('close').addEventListener('click', (e) => { e.stopPropagation(); closeBar(); });
 prompt.addEventListener('pointerdown', (e) => e.stopPropagation());
+prompt.addEventListener('input', () => { send.disabled = !prompt.value.trim(); });
 
-document.getElementById('ask').addEventListener('submit', (e) => {
+document.getElementById('ask').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = prompt.value.trim();
   if (!text) { pill.expand(); return; }
-  pill.submitPrompt(text, includeScreen);
+  body.classList.add('thinking');
+  const withScreen = includeScreen;
   prompt.value = '';
+  send.disabled = true;
   includeScreen = false;
   renderCam();
-});
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && document.body.classList.contains('bar')) closeBar();
+  try { await pill.submitPrompt(text, withScreen); } finally { body.classList.remove('thinking'); }
 });
 
-// Drag to move (anywhere that isn't a button / the text box). Click opens the prompt bar.
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && isBar()) closeBar(); });
+// Clicking away from an empty bar folds it back into the pill.
+window.addEventListener('blur', () => { setTimeout(() => { if (isBar() && !prompt.value.trim() && !document.hasFocus()) closeBar(); }, 120); });
+
+// Drag to move (anywhere that isn't a button or the text box). Click opens the prompt bar.
 let drag = null;
-el.addEventListener('pointerdown', (e) => {
+capsule.addEventListener('pointerdown', (e) => {
   if (e.button !== 0) return;
-  el.setPointerCapture(e.pointerId);
+  capsule.setPointerCapture(e.pointerId);
   drag = { sx: e.screenX, sy: e.screenY, wx: window.screenX, wy: window.screenY, moved: false };
 });
-el.addEventListener('pointermove', (e) => {
+capsule.addEventListener('pointermove', (e) => {
   if (!drag) return;
   const dx = e.screenX - drag.sx;
   const dy = e.screenY - drag.sy;
   if (!drag.moved && Math.hypot(dx, dy) < 4) return;
   drag.moved = true;
-  el.classList.add('dragging');
+  capsule.classList.add('dragging');
   pill.pillMove(drag.wx + dx, drag.wy + dy);
 });
-el.addEventListener('pointerup', () => {
+capsule.addEventListener('pointerup', () => {
   if (!drag) return;
   const moved = drag.moved;
   drag = null;
-  el.classList.remove('dragging');
+  capsule.classList.remove('dragging');
   if (moved) pill.pillDragEnd();
-  else if (!document.body.classList.contains('bar')) openBar();
+  else if (!isBar()) openBar();
   else prompt.focus();
 });
-el.addEventListener('dblclick', (e) => { if (!document.body.classList.contains('bar')) { e.preventDefault(); pill.expand(); } });
-el.addEventListener('contextmenu', (e) => { e.preventDefault(); pill.pillMenu(); });
+capsule.addEventListener('dblclick', (e) => { if (!isBar()) { e.preventDefault(); pill.expand(); } });
+capsule.addEventListener('contextmenu', (e) => { e.preventDefault(); pill.pillMenu(); });
+capsule.tabIndex = 0;
+capsule.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === capsule) { e.preventDefault(); openBar(); } });

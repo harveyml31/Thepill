@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'">
+  <title>Settings — The Pill</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <div class="sheet" id="sheet" role="dialog" aria-label="Settings">
+    <header class="head">
+      <h1>Settings</h1>
+      <button class="close" id="close" title="Close (Esc)"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></button>
+    </header>
+
+    <div class="scroll" id="scroll">
+      <section class="card">
+        <h2>What Claude can see</h2>
+        <div class="row">
+          <div class="text"><b>Watch my screen</b><small>Every message you send includes a screenshot</small></div>
+          <button class="switch" role="switch" data-set="watching" aria-label="Watch my screen"><i></i></button>
+        </div>
+        <div class="row stack">
+          <div class="text"><b>Which screen</b></div>
+          <div class="seg" data-set="captureDisplay">
+            <button data-v="cursor">Under my mouse</button><button data-v="primary">Main display</button><button data-v="all">All displays</button>
+          </div>
+        </div>
+        <div class="row stack">
+          <div class="text"><b>Detail</b><small>Sharper images show small text better</small></div>
+          <div class="seg" data-set="captureMaxEdge" data-num>
+            <button data-v="1280">Light</button><button data-v="1920">Sharp</button><button data-v="2560">Max</button>
+          </div>
+        </div>
+        <div class="row" id="hideSelfRow">
+          <div class="text"><b>Hide The Pill from screenshots</b><small>Claude sees your work, not this panel</small></div>
+          <button class="switch" role="switch" data-set="hideSelfFromCapture" aria-label="Hide The Pill from screenshots"><i></i></button>
+        </div>
+        <p class="note" id="sightNote"></p>
+      </section>
+
+      <section class="card">
+        <h2>Rewind</h2>
+        <div class="row">
+          <div class="text"><b>Remember the last few minutes</b><small>Kept in memory only, wiped when you stop watching</small></div>
+          <button class="switch" role="switch" data-set="rewindEnabled" aria-label="Rewind memory"><i></i></button>
+        </div>
+        <div class="row stack">
+          <div class="text"><b>Snapshot every</b></div>
+          <div class="seg" data-set="rewindIntervalSec" data-num>
+            <button data-v="10">10 s</button><button data-v="20">20 s</button><button data-v="30">30 s</button><button data-v="60">1 min</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Window</h2>
+        <div class="row">
+          <div class="text"><b>Keep chat on top</b><small>Stays open when you click other windows</small></div>
+          <button class="switch" role="switch" data-set="pinned" aria-label="Keep chat on top"><i></i></button>
+        </div>
+        <div class="row">
+          <div class="text"><b>Side-panel mode</b><small>Dock to the screen edge instead of opening where the pill is</small></div>
+          <button class="switch" role="switch" id="dockToggle" aria-label="Side-panel mode"><i></i></button>
+        </div>
+        <div class="row" id="opacityRow">
+          <div class="text"><b>Opacity</b></div>
+          <input type="range" id="opacity" min="0.4" max="1" step="0.05" aria-label="Opacity">
+        </div>
+        <div class="row">
+          <div class="text"><b>Reopen my last chat on start</b></div>
+          <button class="switch" role="switch" data-set="restoreLastChat" aria-label="Reopen last chat"><i></i></button>
+        </div>
+        <div class="row" id="loginRow">
+          <div class="text"><b>Launch at login</b></div>
+          <button class="switch" role="switch" data-set="launchAtLogin" aria-label="Launch at login"><i></i></button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Chats</h2>
+        <div class="actions">
+          <button data-act="recents">All chats</button>
+          <button data-act="back">Back</button>
+          <button data-act="browser">Open in browser</button>
+          <button data-act="clip">Open link from clipboard</button>
+        </div>
+        <form id="linkForm" class="field">
+          <input id="linkInput" type="url" placeholder="Paste a claude.ai chat link" spellcheck="false">
+          <button type="submit">Open</button>
+        </form>
+        <p class="note">Send any chat from your browser here: copy the bookmarklet, add it as a bookmark, and click it on a claude.ai chat.</p>
+        <div class="actions"><button data-act="copyBookmarklet">Copy “Send to Pill” bookmarklet</button></div>
+      </section>
+
+      <section class="card">
+        <h2>Shortcuts</h2>
+        <ul class="keys" id="keys"></ul>
+      </section>
+
+      <footer class="foot">
+        <button data-act="reload">Reload Claude</button>
+        <button data-act="quit" class="danger">Quit</button>
+        <span class="version" id="version"></span>
+      </footer>
+    </div>
+  </div>
+  <script src="settings.js"></script>
+</body>
+</html>
