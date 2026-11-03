@@ -70,6 +70,18 @@ jobs:
         run: npx electron-builder ${{ matrix.args }} --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Self-test the packaged app
+        shell: bash
+        env:
+          PILL_SELFTEST_OUT: ${{ runner.temp }}/selftest.json
+        run: |
+          case "$RUNNER_OS" in
+            macOS)   APP="$(ls -d dist/mac-arm64/*.app 2>/dev/null || ls -d dist/mac/*.app)"; BIN="$APP/Contents/MacOS/$(basename "$APP" .app)"; "$BIN" --self-test || true ;;
+            Windows) "dist/win-unpacked/The Pill.exe" --self-test || true ;;
+            Linux)   sudo apt-get install -y -q xvfb >/dev/null; xvfb-run -a dist/linux-unpacked/thepill --no-sandbox --self-test || true ;;
+          esac
+          cat "$PILL_SELFTEST_OUT"
+          node -e "const r=require(process.env.PILL_SELFTEST_OUT); if(r.keyboardHook!=='loaded'||!/^ok/.test(r.encryptedStorage)){console.error('Packaged app self-test failed');process.exit(1)}"
       - uses: actions/upload-artifact@v4
         with:
           name: the-pill-${{ runner.os }}

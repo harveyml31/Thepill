@@ -71,7 +71,8 @@
         "AppImage",
         "deb"
       ],
-      "category": "Utility"
+      "category": "Utility",
+      "maintainer": "Harvey Leech"
     },
     "asarUnpack": [
       "node_modules/uiohook-napi/**"

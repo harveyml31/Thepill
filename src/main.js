@@ -979,6 +979,7 @@ async function selfTest() {
   });
   try { const v = new Vault(path.join(app.getPath('temp'), `thepill-selftest-${Date.now()}`)); v.append({ t: Date.now(), type: 'test' }); report.encryptedStorage = v.readDay(dayOf()).length === 1 ? `ok (${v.keyProtected ? 'keychain' : 'local key'})` : 'failed'; } catch (err) { report.encryptedStorage = `failed: ${err.message}`; }
   console.log(`THE PILL SELF-TEST ${JSON.stringify(report, null, 2)}`);
+  if (process.env.PILL_SELFTEST_OUT) { try { require('fs').writeFileSync(process.env.PILL_SELFTEST_OUT, JSON.stringify(report, null, 2)); } catch { /* ignore */ } }
   app.exit(0);
 }
 
