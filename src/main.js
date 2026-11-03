@@ -105,6 +105,11 @@ function handleProtocolUrl(raw) {
 }
 
 // ---------------------------------------------------------------- helpers
+/** Our browser identity without the "Electron/x" and app-name tokens that some sign-in pages reject. */
+function chromeUserAgent() {
+  return app.userAgentFallback.replace(/\s(Electron|thepill|The ?Pill)\/\S+/gi, '');
+}
+
 function isClaudeUrl(u) {
   try {
     const url = new URL(u);
@@ -438,7 +443,8 @@ function setupClaudeView() {
   const ses = session.fromPartition(PARTITION);
 
   // Look like the Chrome we are (some sign-in pages refuse "Electron").
-  ses.setUserAgent(ses.getUserAgent().replace(/\s(Electron|thepill|The ?Pill)\/\S+/gi, ''));
+  ses.setUserAgent(chromeUserAgent());
+  wc.setUserAgent(chromeUserAgent());
 
   const allowedPerms = new Set(['clipboard-read', 'clipboard-sanitized-write', 'media', 'notifications', 'fullscreen']);
   ses.setPermissionRequestHandler((_wc, perm, cb, details) => {
@@ -916,6 +922,7 @@ function wireIpc() {
 
 // ---------------------------------------------------------------- app lifecycle
 async function boot() {
+  app.userAgentFallback = chromeUserAgent();
   store = new Store(app.getPath('userData'));
   rewind = new Rewind({
     getSettings: () => store.all(),
