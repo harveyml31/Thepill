@@ -50,6 +50,7 @@ public class FG {
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
 }
 "@
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $last = ""
 while ($true) {
   $h = [FG]::GetForegroundWindow()
@@ -64,11 +65,17 @@ while ($true) {
   Start-Sleep -Milliseconds 700
 }`;
 
-function windowsWatcher(onChange) {
+function windowsWatcher(onChange, onError) {
   let child = null;
   let stopped = false;
+  let failures = 0;
+  // -EncodedCommand (UTF-16LE base64) avoids Windows mangling quotes and newlines in the script.
+  const encoded = Buffer.from(WIN_SCRIPT, 'utf16le').toString('base64');
   const startChild = () => {
-    child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', WIN_SCRIPT], { windowsHide: true });
+    child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded], { windowsHide: true });
+    child.on('error', (err) => onError(`Can’t start PowerShell to see the front window (${err.message})`));
+    let errBuf = '';
+    child.stderr.on('data', (d) => { errBuf = (errBuf + d.toString('utf8')).slice(-400); });
     let buf = '';
     child.stdout.on('data', (d) => {
       buf += d.toString('utf8');
@@ -77,10 +84,16 @@ function windowsWatcher(onChange) {
         const line = buf.slice(0, i).replace(/\r$/, '');
         buf = buf.slice(i + 1);
         const [app = '', title = ''] = line.split('\t');
+        failures = 0;
         onChange({ app, title, url: '' });
       }
     });
-    child.on('exit', () => { if (!stopped) setTimeout(startChild, 3000); });
+    child.on('exit', () => {
+      if (stopped) return;
+      failures++;
+      if (failures >= 3) { onError(`Can’t see which app is in front${errBuf ? `: ${errBuf.trim().split('\n').pop()}` : ''}`); return; }
+      setTimeout(startChild, 3000);
+    });
   };
   startChild();
   return () => { stopped = true; if (child) child.kill(); };
@@ -97,18 +110,32 @@ async function linuxActive() {
   return { app: m ? m[1] : '', title, url: '' };
 }
 
-/** Calls onChange({app, title, url}) whenever the front window changes. Returns a stop function. */
-function watchActiveWindow(onChange, intervalMs = 1200) {
-  if (process.platform === 'win32') return windowsWatcher(onChange);
+/**
+ * Calls onChange({app, title, url}) whenever the front window changes, and onError(message)
+ * if the front window can't be read for a while. Returns a stop function.
+ */
+function watchActiveWindow(onChange, intervalMs = 1200, onError = () => {}) {
+  if (process.platform === 'win32') return windowsWatcher(onChange, onError);
   const read = process.platform === 'darwin' ? macActive : linuxActive;
+  const hint = process.platform === 'darwin'
+    ? 'Allow The Pill to control System Events (Privacy & Security → Automation) and Accessibility'
+    : 'Install xdotool (sudo apt install xdotool) and use an X11 session';
   let last = '';
   let busy = false;
+  let misses = 0;
+  let reported = false;
   const timer = setInterval(async () => {
     if (busy) return;
     busy = true;
     try {
       const w = await read();
-      if (!w) return;
+      if (!w) {
+        misses++;
+        if (misses >= 5 && !reported) { reported = true; onError(`Can’t see which app is in front. ${hint}.`); }
+        return;
+      }
+      misses = 0;
+      if (reported) { reported = false; onError(null); }
       const key = `${w.app}\t${w.title}\t${w.url}`;
       if (key !== last) { last = key; onChange(w); }
     } finally { busy = false; }

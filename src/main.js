@@ -65,7 +65,9 @@ const shortcutStatus = {};
 if (IS_LINUX) app.commandLine.appendSwitch('enable-transparent-visuals');
 
 // ---------------------------------------------------------------- single instance + protocol
-if (!app.requestSingleInstanceLock()) {
+if (process.argv.includes('--self-test')) {
+  // self-test runs alongside a normal copy
+} else if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', (_e, argv) => {
@@ -254,6 +256,20 @@ function applyContentProtection() {
 }
 
 // ---------------------------------------------------------------- windows
+/**
+ * The Pill hides from the Dock on macOS, so it has no visible Edit menu and Cmd+C/V/X/A/Z
+ * may not reach the page. Handle them directly so copy and paste always work.
+ */
+function editShortcuts(wc) {
+  if (!IS_MAC) return;
+  wc.on('before-input-event', (e, input) => {
+    if (input.type !== 'keyDown' || !input.meta || input.control || input.alt) return;
+    const k = String(input.key || '').toLowerCase();
+    const action = { c: 'copy', x: 'cut', a: 'selectAll', v: input.shift ? 'pasteAndMatchStyle' : 'paste', z: input.shift ? 'redo' : 'undo' }[k];
+    if (action) { wc[action](); e.preventDefault(); }
+  });
+}
+
 function createPill() {
   const wa = screen.getPrimaryDisplay().workArea;
   let pos = store.get('pillPos');
@@ -270,6 +286,7 @@ function createPill() {
   pillWin.setAlwaysOnTop(true, 'screen-saver');
   if (IS_MAC) pillWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   pillWin.loadFile(path.join(UI, 'pill.html'));
+  editShortcuts(pillWin.webContents);
   pillWin.on('close', (e) => { if (!quitting) e.preventDefault(); });
 }
 
@@ -343,6 +360,7 @@ function createChat() {
   });
   chatWin.contentView.addChildView(claudeView);
   setupClaudeView();
+  editShortcuts(claudeView.webContents);
 
   // Settings float over the chat in their own rounded view (added last, so it sits on top).
   settingsView = new WebContentsView({
@@ -353,6 +371,7 @@ function createChat() {
   settingsView.setVisible(false);
   chatWin.contentView.addChildView(settingsView);
   settingsView.webContents.loadFile(path.join(UI, 'settings.html'));
+  editShortcuts(settingsView.webContents);
   claudeView.webContents.on('focus', () => { if (settingsOpen) toggleSettings(false); });
   layoutView();
 
@@ -940,7 +959,31 @@ async function boot() {
   });
 }
 
-app.whenReady().then(() => (IS_LINUX ? new Promise((r) => setTimeout(r, 300)) : null)).then(boot);
+/**
+ * `--self-test`: start, check the parts that can break on a new machine, print a report and quit.
+ * Run it from a terminal, e.g. "/Applications/The Pill.app/Contents/MacOS/The Pill" --self-test
+ */
+async function selfTest() {
+  const report = { version: app.getVersion(), platform: `${process.platform}-${process.arch}`, electron: process.versions.electron };
+  try { require('uiohook-napi'); report.keyboardHook = 'loaded'; } catch (err) { report.keyboardHook = `failed: ${err.message}`; }
+  try { const shots = await captureDisplays({ which: 'primary', maxEdge: 640 }); report.screenCapture = shots[0].image.isEmpty() ? 'blank (permission?)' : 'ok'; } catch (err) { report.screenCapture = `failed: ${err.message}`; }
+  if (IS_MAC) {
+    report.screenPermission = systemPreferences.getMediaAccessStatus('screen');
+    report.accessibility = systemPreferences.isTrustedAccessibilityClient(false) ? 'granted' : 'not granted';
+  }
+  const { watchActiveWindow } = require('./shadow/activewin');
+  report.frontWindow = await new Promise((resolve) => {
+    let stop = () => {};
+    const t = setTimeout(() => { stop(); resolve('no answer in 8 s'); }, 8000);
+    stop = watchActiveWindow((w) => { clearTimeout(t); stop(); resolve(`${w.app} — ${w.title}`); }, 700, (e) => { if (e) { clearTimeout(t); stop(); resolve(`failed: ${e}`); } });
+  });
+  try { const v = new Vault(path.join(app.getPath('temp'), `thepill-selftest-${Date.now()}`)); v.append({ t: Date.now(), type: 'test' }); report.encryptedStorage = v.readDay(dayOf()).length === 1 ? `ok (${v.keyProtected ? 'keychain' : 'local key'})` : 'failed'; } catch (err) { report.encryptedStorage = `failed: ${err.message}`; }
+  console.log(`THE PILL SELF-TEST ${JSON.stringify(report, null, 2)}`);
+  app.exit(0);
+}
+
+if (process.argv.includes('--self-test')) app.whenReady().then(selfTest);
+else app.whenReady().then(() => (IS_LINUX ? new Promise((r) => setTimeout(r, 300)) : null)).then(boot);
 app.on('before-quit', () => { quitting = true; if (shadow) shadow.stop(); if (store) store.flush(); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', (e) => { if (!quitting) e.preventDefault(); });

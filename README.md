@@ -40,7 +40,17 @@ Turn on **Learn how I work** in settings (or the tray menu). While it's on, The 
 
 **Permissions:** macOS asks for **Accessibility** and **Input Monitoring** (to see keys and the front window) and, the first time, for permission to read your browser's current tab. Windows needs nothing extra. Linux needs an X11 session with `xdotool` installed.
 
-## Install and run
+## Download (no setup needed)
+
+Every push builds installers on GitHub's Mac, Windows and Linux machines. Open the repository's **Actions** tab → the latest **Test and build** run → **Artifacts**:
+
+- **Mac:** `the-pill-macOS` holds two `.dmg` files: `arm64` for Apple Silicon (M1–M4), `x64` for older Intel Macs. Drag The Pill into Applications. The first time, macOS will refuse to open it because it isn't notarised by Apple: open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. Then allow **Screen Recording**, and for Shadow mode, **Accessibility** and **Input Monitoring**.
+- **Windows:** `the-pill-Windows` holds the `.exe` installer. If Windows SmartScreen appears, click **More info → Run anyway**.
+- **Linux:** `the-pill-Linux` holds an `.AppImage` (make it executable and run it) and a `.deb`.
+
+If anything misbehaves, run the app with `--self-test` from a terminal (on a Mac: `"/Applications/The Pill.app/Contents/MacOS/The Pill" --self-test`). It prints what works and what's missing.
+
+## Install and run (from source)
 
 You need [Node.js](https://nodejs.org) 18 or newer.
 

@@ -42,7 +42,18 @@
         "NSScreenCaptureUsageDescription": "The Pill lets Claude see your screen, only while you have watching turned on or press Share screen.",
         "NSMicrophoneUsageDescription": "Used only if you use Claude's voice mode.",
         "NSAppleEventsUsageDescription": "Shadow mode reads which app and browser tab is in front, only while you have it turned on."
-      }
+      },
+      "identity": "-",
+      "hardenedRuntime": false,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
     },
     "win": {
       "icon": "assets/icon.png",
@@ -61,9 +72,18 @@
         "deb"
       ],
       "category": "Utility"
-    }
+    },
+    "asarUnpack": [
+      "node_modules/uiohook-napi/**"
+    ],
+    "artifactName": "The-Pill-${version}-${os}-${arch}.${ext}",
+    "npmRebuild": false
   },
   "dependencies": {
     "uiohook-napi": "^1.5.5"
-  }
+  },
+  "author": {
+    "name": "Harvey Leech"
+  },
+  "homepage": "https://github.com/harveyml31/Thepill"
 }

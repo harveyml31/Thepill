@@ -110,6 +110,27 @@ app.whenReady().then(async () => {
     check('the attached log contains what was typed, and no secrets', md.includes('Are you free Tuesday at 3pm?') && !md.includes('Hunter2') && !md.includes('salary'));
     fs.writeFileSync(path.join(__dirname, 'out', 'sample-workday.md'), md);
 
+    // 6b. If the front window can't be read, typed text is never kept
+    {
+      const { EventEmitter } = require('events');
+      const { Shadow } = require('../src/shadow/recorder');
+      const { Vault } = require('../src/shadow/vault');
+      const blindVault = new Vault(fs.mkdtempSync(path.join(os.tmpdir(), 'blind-')));
+      const hook = Object.assign(new EventEmitter(), { start() {}, stop() {} });
+      let reportError;
+      const blind = new Shadow({ getSettings: () => ({ keyboardLayout: 'us', shadowFrames: false }), vault: blindVault, hook,
+        watchWindow: (_onChange, _i, onError) => { reportError = onError; return () => {}; } });
+      blind.start();
+      for (const k of [25, 30, 31, 31, 17, 24, 19, 32]) { hook.emit('keydown', { keycode: k, shiftKey: false }); hook.emit('keyup', { keycode: k }); } // "password"
+      hook.emit('keydown', { keycode: 28 });
+      reportError('Can’t see which app is in front.');
+      const st = blind.status();
+      blind.stop();
+      const ev = blindVault.readDay(dayOf());
+      check('when the front app is unknown, typing is not kept', !JSON.stringify(ev).includes('password') && ev.some((x) => x.hidden === 'unknown-window'), JSON.stringify(ev.filter((x) => x.type === 'typed')));
+      check('and settings say why', st.mode === 'blind' && /front/.test(st.windowError || ''), JSON.stringify(st));
+    }
+
     // 7. Delete everything
     await I.shadowAction('delete-all');
     check('delete everything removes the data', I.vault().days().length === 0);

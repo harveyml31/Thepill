@@ -54,9 +54,10 @@ function renderShadow(s) {
     call: 'On a call: nothing is recorded',
     private: 'Private app: nothing is recorded',
     error: `Stopped: ${sh.error || 'unknown problem'}`,
+    blind: sh.windowError || 'Checking which app is in front. Typing is saved once it can tell.',
   }[sh.mode || 'off'];
   $('shadowStatus').textContent = text;
-  live.className = `live${sh.mode === 'recording' ? ' on' : ''}${sh.mode === 'error' ? ' warn' : ''}`;
+  live.className = `live${sh.mode === 'recording' ? ' on' : ''}${sh.mode === 'error' || (sh.mode === 'blind' && sh.windowError) ? ' warn' : ''}`;
   $('pauseShadow').textContent = sh.mode === 'paused' ? 'Resume now' : 'Pause 15 min';
   $('pauseShadow').disabled = !sh.running;
   if (document.activeElement !== $('shadowNever')) $('shadowNever').value = (s.settings.shadowNever || []).join(', ');

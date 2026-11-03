@@ -11,7 +11,7 @@
  * claude.ai's markup can change at any time, so every selector has fallbacks and every
  * failure path still sends your message (just without the screenshot) and reports it.
  */
-const { ipcRenderer } = require('electron');
+const { ipcRenderer, webFrame } = require('electron');
 
 let state = { watching: false };
 let bypass = false;
@@ -20,6 +20,8 @@ let skipNextAutoCapture = false; // set after a manual share so we don't attach 
 
 const SEL = {
   editor: [
+    '[data-testid="chat-input"][contenteditable="true"]',
+    '[data-testid="chat-input"]',
     'div.ProseMirror[contenteditable="true"]',
     '[data-testid="chat-input"] [contenteditable="true"]',
     '[contenteditable="true"][role="textbox"]',
@@ -86,6 +88,7 @@ function composerRegion(editor) {
  * or — if claude.ai stops rendering a file input — the bottom-most rich-text editor on the page.
  */
 function isMainComposer(el) {
+  if (el.closest && el.closest('[data-testid="chat-input"]')) return true;
   const EDITORS = '[contenteditable="true"], textarea';
   let node = el.parentElement;
   for (let i = 0; i < 6 && node && node !== document.body; i++) {
@@ -175,23 +178,59 @@ function insertText(text) {
   return document.execCommand('insertText', false, text);
 }
 
-/** Resolve true if something new shows up in the composer area within `ms`. */
+const THUMBS = '[data-testid="file-thumbnail"], [data-testid*="attachment" i], button[aria-label="Remove"]';
+
+/**
+ * Resolve true if an attachment appears within `ms`: claude.ai's attachment card, or anything new
+ * in the composer area other than typed text.
+ */
 function watchForAttachment(region, editor, ms = 2500) {
   return new Promise((resolve) => {
-    if (!region) { resolve(false); return; }
+    const before = document.querySelectorAll(THUMBS).length;
     let done = false;
-    const finish = (v) => { if (done) return; done = true; obs.disconnect(); clearTimeout(t); resolve(v); };
-    const obs = new MutationObserver((muts) => {
-      for (const m of muts) {
-        if (editor && editor.contains(m.target)) continue;
-        for (const n of m.addedNodes) {
-          if (n.nodeType === 1) { finish(true); return; }
+    const finish = (v) => { if (done) return; done = true; if (obs) obs.disconnect(); clearInterval(poll); clearTimeout(t); resolve(v); };
+    let obs = null;
+    if (region) {
+      obs = new MutationObserver((muts) => {
+        for (const m of muts) {
+          if (editor && editor.contains(m.target)) continue;
+          for (const n of m.addedNodes) if (n.nodeType === 1) { finish(true); return; }
         }
-      }
-    });
-    obs.observe(region, { childList: true, subtree: true });
+      });
+      obs.observe(region, { childList: true, subtree: true });
+    }
+    const poll = setInterval(() => { if (document.querySelectorAll(THUMBS).length > before) finish(true); }, 100);
     const t = setTimeout(() => finish(false), ms);
   });
+}
+
+/**
+ * claude.ai is a React app: setting files on its hidden input doesn't always reach React's
+ * handler. React's props live on the element in the page's own JavaScript world, which this
+ * isolated script can't see, so ask the page world to call onChange directly.
+ * Returns true if React's handler was found and called.
+ */
+async function reactFileChange(input) {
+  const mark = `pill-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  input.setAttribute('data-pill-upload', mark);
+  try {
+    return await webFrame.executeJavaScript(`(() => {
+      const inp = document.querySelector('[data-pill-upload="${mark}"]');
+      if (!inp) return false;
+      const key = Object.keys(inp).find((k) => k.startsWith('__reactProps$'));
+      const onChange = key && inp[key] && inp[key].onChange;
+      if (typeof onChange !== 'function') return false;
+      const ev = { target: inp, currentTarget: inp, type: 'change', bubbles: true, nativeEvent: new Event('change'),
+        preventDefault() {}, stopPropagation() {}, persist() {}, isDefaultPrevented: () => false, isPropagationStopped: () => false };
+      onChange(ev);
+      return true;
+    })()`);
+  } catch (err) {
+    log('react onChange failed:', err.message);
+    return false;
+  } finally {
+    input.removeAttribute('data-pill-upload');
+  }
 }
 
 function makeFiles(files) {
@@ -214,12 +253,16 @@ async function attachFiles(files) {
   const input = findFileInput(editor);
   if (input) {
     const seen = watchForAttachment(region, editor);
+    let how = 'file-input';
     try {
       input.files = dataTransferOf(fileObjs).files;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
+      if (await reactFileChange(input)) how = 'react';
+      else {
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
     } catch (err) { log('file-input attach failed:', err.message); }
-    if (await seen) return 'file-input';
+    if (await seen) return how;
   }
 
   // 2) A paste event carrying the files, like pasting an image.

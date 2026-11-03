@@ -19,8 +19,8 @@
 <div id="log"></div>
 <fieldset>
   <div class="thumbs" id="thumbs"></div>
-  <div class="ProseMirror" contenteditable="true" id="ed"></div>
-  <input type="file" id="file" multiple hidden accept="image/*,.pdf">
+  <div class="ProseMirror" contenteditable="true" id="ed" data-testid="chat-input"></div>
+  <input type="file" id="file" data-testid="file-upload" multiple hidden accept="image/*,.pdf,.md,text/*">
   <button type="button" aria-label="Attach">📎</button>
   <button type="button" aria-label="Send message" id="send" disabled>Send</button>
 </fieldset>
@@ -48,12 +48,18 @@
       const url = URL.createObjectURL(f);
       setTimeout(() => {
         files.push({ name: f.name, url });
-        const img = document.createElement('img'); img.src = url; thumbs.appendChild(img);
+        const img = document.createElement('img'); img.src = url; img.setAttribute('data-testid', 'file-thumbnail'); thumbs.appendChild(img);
         uploading--; sync();
       }, 600);
     }
   }
-  document.getElementById('file')?.addEventListener('change', (e) => addFiles(e.target.files, 'file-input'));
+  // ?react=1 behaves like a React app: no native change listener, only a React onChange prop.
+  if (location.search.includes('react')) {
+    const inp = document.getElementById('file');
+    inp.__reactProps$mock = { onChange: (e) => addFiles(e.target.files, 'react') };
+  } else {
+    document.getElementById('file')?.addEventListener('change', (e) => addFiles(e.target.files, 'file-input'));
+  }
   ed.addEventListener('paste', (e) => {
     const fl = [...(e.clipboardData?.files || [])];
     if (fl.length) { e.preventDefault(); addFiles(fl, 'paste'); }

@@ -44,7 +44,9 @@ class Shadow extends EventEmitter {
     this.running = false;
     this.pausedUntil = 0;
     this.error = null;
-    this.ctx = { app: '', title: '', url: '', kind: 'normal' };
+    // Until we know which app is in front we can't spot login pages, so typed text isn't kept.
+    this.ctx = { app: '', title: '', url: '', kind: 'unknown' };
+    this.lastWindowAt = 0;
     this._reset();
   }
 
@@ -83,7 +85,7 @@ class Shadow extends EventEmitter {
       this._status();
       throw err;
     }
-    this.stopWindow = this.watchWindow((w) => this._window(w));
+    this.stopWindow = this.watchWindow((w) => this._window(w), undefined, (err) => { this.windowError = err; this._status(); });
     this.timers = [
       setInterval(() => this._flushMinute(), 60000),
       setInterval(() => this._idleCheck(), 2000),
@@ -122,9 +124,10 @@ class Shadow extends EventEmitter {
       if (this._paused()) mode = 'paused';
       else if (this.ctx.kind === 'call') mode = 'call';
       else if (this.ctx.kind === 'private') mode = 'private';
+      else if (this.ctx.kind === 'unknown') mode = 'blind';
       else mode = 'recording';
     }
-    return { enabled: !!s.shadowEnabled, running: this.running, mode, pausedUntil: this.pausedUntil, error: this.error, today: { ...this.today } };
+    return { enabled: !!s.shadowEnabled, running: this.running, mode, pausedUntil: this.pausedUntil, error: this.error, windowError: this.windowError || null, today: { ...this.today } };
   }
 
   _status() {
@@ -150,6 +153,7 @@ class Shadow extends EventEmitter {
     const s = this.getSettings();
     const kind = classifyContext(w, Array.isArray(s.shadowNever) ? s.shadowNever : DEFAULT_NEVER_RECORD);
     this.ctx = { app: w.app || '', title: w.title || '', url: w.url || '', kind };
+    this.lastWindowAt = Date.now();
     this.selectAll = false;
     if (!this.running || this._paused()) return;
     if (kind === 'call') this._log({ type: 'focus', kind, app: 'Call', title: '' });
@@ -232,7 +236,7 @@ class Shadow extends EventEmitter {
   }
 
   _copied() {
-    if (!this._allowed() || this.ctx.kind === 'login') return;
+    if (!this._allowed() || this.ctx.kind === 'login' || this.ctx.kind === 'unknown') return;
     let text = '';
     try { text = clipboard.readText() || ''; } catch { /* clipboard busy */ }
     if (!text.trim()) return;
@@ -243,7 +247,7 @@ class Shadow extends EventEmitter {
   }
 
   _pasted() {
-    if (this.ctx.kind === 'login') return;
+    if (this.ctx.kind === 'login' || this.ctx.kind === 'unknown') return;
     let len = 0;
     try { len = (clipboard.readText() || '').length; } catch { /* ignore */ }
     const from = this.lastCopy && Date.now() - this.lastCopy.t < 10 * 60000 ? this.lastCopy : null;
@@ -256,6 +260,7 @@ class Shadow extends EventEmitter {
     this.buf = null;
     this.selectAll = false;
     if (!b || !b.text.trim()) return;
+    if (b.ctx.kind === 'unknown') { this.today.hidden++; this._log({ type: 'typed', t: b.t0, hidden: 'unknown-window', chars: b.text.length }); return; }
     if (b.ctx.kind === 'login') { this.today.hidden++; this._log({ type: 'typed', t: b.t0, hidden: 'login', chars: b.text.length, app: b.ctx.app }); return; }
     if (b.ctx.kind === 'call' || b.ctx.kind === 'private') return;
     const { text, redacted } = redactTyped(b.text, { submitted });
@@ -311,7 +316,7 @@ class Shadow extends EventEmitter {
   }
 
   async _frame() {
-    if (!this.getSettings().shadowFrames || !this._allowed() || this.ctx.kind === 'login') return;
+    if (!this.getSettings().shadowFrames || !this._allowed() || this.ctx.kind === 'login' || this.ctx.kind === 'unknown') return;
     const shot = await this.captureFrame();
     if (!shot) return;
     if (this.lastFrameFp && this.difference(this.lastFrameFp, shot.fp) < 0.003) return;

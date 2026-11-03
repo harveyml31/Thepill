@@ -126,6 +126,17 @@ app.whenReady().then(async () => {
     await wc.loadURL(process.env.PILL_CLAUDE_URL + '?fresh=1');
     await sleep(1200);
 
+    // 6b2. A React-style page (claude.ai is React) -> attached through React's own onChange
+    await wc.loadURL(process.env.PILL_CLAUDE_URL + '?react=1');
+    await sleep(1500);
+    I.setWatching(true);
+    await typeAndSend(wc, 'React path');
+    s = await waitSent(wc, 1);
+    const viaR = await wc.executeJavaScript('window.__attachVia');
+    check('React-style page: screenshot attached via React onChange', s[0] && s[0].images === 1 && viaR[0] === 'react', JSON.stringify({ s: s[0], viaR }));
+    await wc.loadURL(process.env.PILL_CLAUDE_URL + '?fresh=2');
+    await sleep(1200);
+
     // 6c. Editing an old message (a textarea, no attachments) is never hijacked
     await wc.executeJavaScript(`(() => { const t = document.createElement('textarea'); t.id = 'edit'; document.getElementById('log').appendChild(t);
       t.addEventListener('keydown', (e) => { if (e.key === 'Enter') window.__editEnter = true; }); t.focus(); })()`);
