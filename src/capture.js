@@ -57,21 +57,29 @@ function stamp(ts) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}.${p(d.getMinutes())}.${p(d.getSeconds())}`;
 }
 
-/** Cheap perceptual fingerprint so Rewind only keeps frames where something changed. */
+/**
+ * Small greyscale fingerprint so Rewind only keeps frames where something changed.
+ * 160x90 is fine enough to notice new text, a dialog or a different table, and coarse
+ * enough that a ticking clock or a blinking cursor doesn't count.
+ */
+const FP_W = 160;
+const FP_H = 90;
 function fingerprint(image) {
-  const tiny = image.resize({ width: 48, height: 27, quality: 'good' });
+  const tiny = image.resize({ width: FP_W, height: FP_H, quality: 'good' });
   const bmp = tiny.toBitmap();
   const out = new Uint8Array(bmp.length / 4);
   for (let i = 0, j = 0; i < bmp.length; i += 4, j++) out[j] = (bmp[i] + bmp[i + 1] + bmp[i + 2]) / 3;
   return out;
 }
 
+/** Share of the screen (0..1) that visibly changed between two fingerprints. */
 function difference(a, b) {
-  if (!a || !b || a.length !== b.length) return 255;
-  let sum = 0;
-  for (let i = 0; i < a.length; i++) sum += Math.abs(a[i] - b[i]);
-  return sum / a.length;
+  if (!a || !b || a.length !== b.length) return 1;
+  let changed = 0;
+  for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > 12) changed++;
+  return changed / a.length;
 }
+const MIN_CHANGE = 0.003; // ~0.3% of the screen: a new line of text, not a clock tick
 
 class Rewind {
   constructor({ getSettings, onChange, beforeCapture, afterCapture }) {
@@ -120,7 +128,7 @@ class Rewind {
       const shot = shots[0];
       const fp = fingerprint(shot.image);
       const last = this.frames[this.frames.length - 1];
-      if (last && difference(last.fp, fp) < 1.2) { last.seenAt = shot.at; return; }
+      if (last && difference(last.fp, fp) < MIN_CHANGE) { last.seenAt = shot.at; return; }
       this.frames.push({ jpeg: shot.image.toJPEG(72), at: shot.at, seenAt: shot.at, fp });
       const max = Math.max(2, Number(s.rewindFrames) || 8);
       while (this.frames.length > max) this.frames.shift();
@@ -135,4 +143,4 @@ class Rewind {
   }
 }
 
-module.exports = { captureDisplays, Rewind, stamp };
+module.exports = { captureDisplays, Rewind, stamp, fingerprint, difference, MIN_CHANGE };
