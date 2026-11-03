@@ -20,7 +20,8 @@ contextBridge.exposeInMainWorld('pill', {
   toggleWatching: () => ipcRenderer.invoke('ui:toggle-watching'),
   shareScreen: () => ipcRenderer.invoke('ui:share-screen'),
   shareRewind: () => ipcRenderer.invoke('ui:share-rewind'),
-  openScreenSettings: () => ipcRenderer.invoke('ui:open-screen-settings'),
+  openScreenSettings: (which) => ipcRenderer.invoke('ui:open-screen-settings', which),
+  shadow: (action, arg) => ipcRenderer.invoke('ui:shadow', action, arg),
 
   // chat
   newChat: () => ipcRenderer.invoke('ui:nav', 'new'),

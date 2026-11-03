@@ -20,6 +20,26 @@ It's **the real claude.ai**, signed into your account. It isn't a separate model
 
 On macOS and Windows, The Pill hides its own windows from screenshots, so Claude sees your work and not the chat panel. Rewind pauses when your screen is locked or you've been away for a while.
 
+## Shadow mode: learn how you work
+
+Turn on **Learn how I work** in settings (or the tray menu). While it's on, The Pill records, on this computer only:
+
+- **What you type**, rebuilt into the actual text with your corrections applied, plus which window and site you typed it in and whether you sent it with Enter. This is how it learns your writing voice.
+- **Where your time goes**: which app, window and site is in front, and for how long.
+- **Clicks, and copy → paste between apps** (e.g. LinkedIn → Bullhorn), which reveal your repeated workflows.
+- **Typing and mouse rhythm**: speed, pauses, corrections, key-hold time, mouse distance, shortcuts.
+- **A screen snapshot** about once a minute when the screen changed (optional).
+
+**Never recorded:** password managers and banking apps; anything typed on login, sign-in or verification pages; password-like strings and one-time codes anywhere (they're replaced with `[hidden]`); and **anything at all during calls** (Zoom, Teams, Meet, Webex, FaceTime, Slack huddles). Only the fact that a call happened, and how long it lasted, is noted. You can add your own apps or sites to the never-record list. On a Mac, password fields also block keyboard recording at the system level.
+
+**Storage:** everything is encrypted (AES-256-GCM) in The Pill's data folder, with the key kept in your system keychain where available, and deleted automatically after 14 days (7, 14 or 30 to choose). **Delete today** and **Delete everything** are one click away. Nothing is uploaded unless you press a review button.
+
+**Using it:**
+- **Review today with Claude** opens a fresh chat with today's log attached and a prompt asking where your time went, which workflows you repeat, how you write, and what to change.
+- **Build my playbook (7 days)** attaches the week and asks for a "write like me" guide, step-by-step procedures for your workflows, your decision rules, and an automation plan ranked by hours saved.
+
+**Permissions:** macOS asks for **Accessibility** and **Input Monitoring** (to see keys and the front window) and, the first time, for permission to read your browser's current tab. Windows needs nothing extra. Linux needs an X11 session with `xdotool` installed.
+
 ## Install and run
 
 You need [Node.js](https://nodejs.org) 18 or newer.
@@ -67,5 +87,7 @@ Double-click the pill to go straight to the full chat. Right-click it for everyt
 
 ```bash
 npm run icons                                                # regenerate icons (needs Python + Pillow)
+npm test                                                     # Shadow mode privacy and digest checks
 xvfb-run -a npx electron --no-sandbox test/e2e-main.js       # end-to-end test against a fake claude.ai page
+xvfb-run -a npx electron --no-sandbox test/shadow-e2e.js     # Shadow mode with real typing (needs xdotool)
 ```

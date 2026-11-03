@@ -37,8 +37,13 @@
   function sync() { send.disabled = uploading > 0 || (!ed.innerText.trim() && !files.length); }
   function addFiles(list, via) {
     for (const f of list) {
-      if (!f.type.startsWith('image/')) continue;
       window.__attachVia.push(via);
+      if (!f.type.startsWith('image/')) {
+        files.push({ name: f.name, url: null, file: f });
+        const chip = document.createElement('span'); chip.textContent = '📄 ' + f.name; chip.className = 'doc'; thumbs.appendChild(chip);
+        sync();
+        continue;
+      }
       uploading++; sync();
       const url = URL.createObjectURL(f);
       setTimeout(() => {
@@ -58,9 +63,10 @@
     if (send.disabled) return;
     const text = ed.innerText.trim();
     const div = document.createElement('div'); div.className = 'msg'; div.textContent = text;
-    for (const f of files) { const i = document.createElement('img'); i.src = f.url; div.appendChild(i); }
+    for (const f of files) { if (!f.url) continue; const i = document.createElement('img'); i.src = f.url; div.appendChild(i); }
     document.getElementById('log').appendChild(div);
-    window.__sent.push({ text, images: files.length, names: files.map((f) => f.name) });
+    window.__sent.push({ text, images: files.filter((f) => f.url).length, docs: files.filter((f) => !f.url).length, names: files.map((f) => f.name) });
+    window.__docs = (window.__docs || []).concat(files.filter((f) => !f.url).map((f) => f.file));
     ed.innerHTML = ''; files = []; thumbs.innerHTML = ''; sync();
   }
   send.addEventListener('click', doSend);

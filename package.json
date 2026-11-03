@@ -7,12 +7,13 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "e2e": "electron test/e2e-main.js",
+    "e2e": "electron --no-sandbox test/e2e-main.js && electron --no-sandbox test/shadow-e2e.js",
     "icons": "python3 scripts/make-icons.py",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
-    "dist:linux": "electron-builder --linux"
+    "dist:linux": "electron-builder --linux",
+    "test": "node test/shadow-unit.js"
   },
   "devDependencies": {
     "electron": "44.9.0",
@@ -21,18 +22,48 @@
   "build": {
     "appId": "app.thepill.desktop",
     "productName": "The Pill",
-    "files": ["src/**/*", "assets/**/*", "package.json"],
-    "protocols": [{ "name": "The Pill", "schemes": ["thepill"] }],
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "protocols": [
+      {
+        "name": "The Pill",
+        "schemes": [
+          "thepill"
+        ]
+      }
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "assets/icon.png",
       "extendInfo": {
         "NSScreenCaptureUsageDescription": "The Pill lets Claude see your screen, only while you have watching turned on or press Share screen.",
-        "NSMicrophoneUsageDescription": "Used only if you use Claude's voice mode."
+        "NSMicrophoneUsageDescription": "Used only if you use Claude's voice mode.",
+        "NSAppleEventsUsageDescription": "Shadow mode reads which app and browser tab is in front, only while you have it turned on."
       }
     },
-    "win": { "icon": "assets/icon.png", "target": ["nsis"] },
-    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true },
-    "linux": { "icon": "assets/icon.png", "target": ["AppImage", "deb"], "category": "Utility" }
+    "win": {
+      "icon": "assets/icon.png",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility"
+    }
+  },
+  "dependencies": {
+    "uiohook-napi": "^1.5.5"
   }
 }

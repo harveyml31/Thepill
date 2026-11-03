@@ -8,8 +8,9 @@ let shownText = '';
 
 function baseStatus() {
   if (!state) return '';
-  if (!state.watching) return 'Screen off · Claude sees only what you share';
-  return state.rewindCount ? `Watching your screen · Rewind ${state.rewindCount}` : 'Watching your screen';
+  const learning = state.shadow && state.shadow.mode === 'recording' ? ' · learning how you work' : '';
+  if (!state.watching) return `Screen off${learning || ' · Claude sees only what you share'}`;
+  return (state.rewindCount ? `Watching your screen · Rewind ${state.rewindCount}` : 'Watching your screen') + learning;
 }
 
 /** Swap the status line with a short slide so changes are noticed but quiet. */
@@ -69,7 +70,7 @@ $('collapse').onclick = () => pill.collapse();
 $('bannerClose').onclick = () => { banner.hidden = true; syncOverlay(); };
 $('bannerAction').onclick = () => {
   const id = $('bannerAction').dataset.id;
-  if (id === 'screen-settings') pill.openScreenSettings();
+  if (id === 'screen-settings' || id === 'access-settings') pill.openScreenSettings(id);
   if (id === 'reload') pill.reload();
   banner.hidden = true; syncOverlay();
 };

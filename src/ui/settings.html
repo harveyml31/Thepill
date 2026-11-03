@@ -39,6 +39,48 @@
         <p class="note" id="sightNote"></p>
       </section>
 
+      <section class="card" id="shadowCard">
+        <h2>Shadow mode</h2>
+        <div class="row">
+          <div class="text"><b>Learn how I work</b><small>Records what you type, the apps you use, clicks and rhythm. Stays on this computer, encrypted.</small></div>
+          <button class="switch" role="switch" data-set="shadowEnabled" aria-label="Learn how I work"><i></i></button>
+        </div>
+        <div class="live" id="shadowLive"><span class="live-dot"></span><span id="shadowStatus">Off</span></div>
+        <div class="stats" id="shadowStats" hidden>
+          <div><b id="stActive">0m</b><small>active</small></div>
+          <div><b id="stWords">0</b><small>words typed</small></div>
+          <div><b id="stSent">0</b><small>messages sent</small></div>
+          <div><b id="stWpm">0</b><small>words / min</small></div>
+        </div>
+        <div class="actions">
+          <button data-act="reviewDay" class="primary">Review today with Claude</button>
+          <button data-act="reviewWeek">Build my playbook (7 days)</button>
+          <button data-act="pauseShadow" id="pauseShadow">Pause 15 min</button>
+        </div>
+        <div class="row">
+          <div class="text"><b>Screen snapshots</b><small>About once a minute, only when the screen changed</small></div>
+          <button class="switch" role="switch" data-set="shadowFrames" aria-label="Screen snapshots"><i></i></button>
+        </div>
+        <div class="row stack">
+          <div class="text"><b>Keyboard</b><small>So symbols like " and @ are read correctly</small></div>
+          <div class="seg" data-set="keyboardLayout"><button data-v="auto">Automatic</button><button data-v="uk">UK</button><button data-v="us">US</button></div>
+        </div>
+        <div class="row stack">
+          <div class="text"><b>Keep recordings for</b></div>
+          <div class="seg" data-set="shadowRetentionDays" data-num><button data-v="7">7 days</button><button data-v="14">14 days</button><button data-v="30">30 days</button></div>
+        </div>
+        <label class="row stack" for="shadowNever">
+          <div class="text"><b>Never record</b><small>Apps or sites, separated by commas. Password managers, banking, login pages and calls are always skipped.</small></div>
+          <textarea id="shadowNever" rows="3" spellcheck="false"></textarea>
+        </label>
+        <div class="actions">
+          <button data-act="deleteToday" class="danger-soft">Delete today</button>
+          <button data-act="deleteAll" class="danger-soft">Delete everything</button>
+          <button data-act="openFolder">Show data folder</button>
+        </div>
+        <p class="note" id="shadowStorage"></p>
+      </section>
+
       <section class="card">
         <h2>Rewind</h2>
         <div class="row">

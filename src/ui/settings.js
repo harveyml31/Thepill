@@ -39,6 +39,44 @@ function render(s) {
     return li;
   }));
   $('version').textContent = `The Pill ${s.version}`;
+  renderShadow(s);
+}
+
+function fmtMin(m) { return m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`; }
+
+function renderShadow(s) {
+  const sh = s.shadow || {};
+  const live = $('shadowLive');
+  const text = {
+    off: 'Off. Nothing is being recorded.',
+    recording: 'Recording on this computer',
+    paused: sh.pausedUntil ? `Paused until ${new Date(sh.pausedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Paused',
+    call: 'On a call: nothing is recorded',
+    private: 'Private app: nothing is recorded',
+    error: `Stopped: ${sh.error || 'unknown problem'}`,
+  }[sh.mode || 'off'];
+  $('shadowStatus').textContent = text;
+  live.className = `live${sh.mode === 'recording' ? ' on' : ''}${sh.mode === 'error' ? ' warn' : ''}`;
+  $('pauseShadow').textContent = sh.mode === 'paused' ? 'Resume now' : 'Pause 15 min';
+  $('pauseShadow').disabled = !sh.running;
+  if (document.activeElement !== $('shadowNever')) $('shadowNever').value = (s.settings.shadowNever || []).join(', ');
+}
+
+async function refreshShadowStats() {
+  try {
+    const [sum, store] = await Promise.all([pill.shadow('summary'), pill.shadow('storage')]);
+    if (sum && sum.activeMinutes) {
+      $('shadowStats').hidden = false;
+      $('stActive').textContent = fmtMin(sum.activeMinutes);
+      $('stWords').textContent = sum.words.toLocaleString();
+      $('stSent').textContent = String(sum.sent);
+      $('stWpm').textContent = String(sum.wpm);
+    } else $('shadowStats').hidden = true;
+    if (store) {
+      const mb = store.bytes / 1048576;
+      $('shadowStorage').textContent = `${mb < 1 ? '<1' : mb.toFixed(0)} MB stored · ${store.days} day${store.days === 1 ? '' : 's'} · ${store.keyProtected ? 'key kept in your system keychain' : 'encrypted, key stored next to the data'}`;
+    }
+  } catch { /* stats are optional */ }
 }
 
 // switches
@@ -71,6 +109,12 @@ const acts = {
   clip: async () => { if (await pill.linkFromClipboard()) pill.toggleSettings(false); },
   reload: () => pill.reload(),
   quit: () => pill.quit(),
+  reviewDay: async (btn) => { btn.disabled = true; try { await pill.shadow('review-day'); pill.toggleSettings(false); } finally { btn.disabled = false; } },
+  reviewWeek: async (btn) => { btn.disabled = true; try { await pill.shadow('review-week'); pill.toggleSettings(false); } finally { btn.disabled = false; } },
+  pauseShadow: () => pill.shadow(state && state.shadow && state.shadow.mode === 'paused' ? 'resume' : 'pause', 15 * 60000),
+  deleteToday: (btn) => confirmThen(btn, 'Tap again to delete today', () => pill.shadow('delete-today')),
+  deleteAll: (btn) => confirmThen(btn, 'Tap again to delete everything', () => pill.shadow('delete-all')),
+  openFolder: () => pill.shadow('open-folder'),
   copyBookmarklet: async (btn) => {
     await pill.copyText(BOOKMARKLET);
     const was = btn.textContent;
@@ -78,6 +122,20 @@ const acts = {
     setTimeout(() => { btn.textContent = was; }, 2600);
   },
 };
+
+function confirmThen(btn, ask, fn) {
+  if (btn.dataset.armed) { delete btn.dataset.armed; btn.classList.remove('confirm'); btn.textContent = btn.dataset.label; fn().then(refreshShadowStats); return; }
+  btn.dataset.label = btn.textContent;
+  btn.dataset.armed = '1';
+  btn.classList.add('confirm');
+  btn.textContent = ask;
+  setTimeout(() => { if (btn.dataset.armed) { delete btn.dataset.armed; btn.classList.remove('confirm'); btn.textContent = btn.dataset.label; } }, 4000);
+}
+
+$('shadowNever').addEventListener('change', (e) => {
+  const list = e.target.value.split(',').map((x) => x.trim()).filter(Boolean);
+  pill.setSettings({ shadowNever: list });
+});
 
 $('opacity').addEventListener('input', (e) => pill.setSettings({ opacity: Number(e.target.value) }));
 $('linkForm').addEventListener('submit', async (e) => {
@@ -93,6 +151,7 @@ pill.onSettingsAnim(({ open }) => {
   document.body.classList.toggle('open', !!open);
   if (open) {
     $('scroll').scrollTop = 0;
+    refreshShadowStats();
     requestAnimationFrame(() => document.querySelectorAll('.seg').forEach(placeThumb));
   }
 });

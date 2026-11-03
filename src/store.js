@@ -2,6 +2,7 @@
 // Tiny JSON settings store kept in the app's userData folder.
 const fs = require('fs');
 const path = require('path');
+const { DEFAULT_NEVER_RECORD } = require('./shadow/privacy');
 
 const DEFAULTS = {
   // Sight
@@ -14,6 +15,13 @@ const DEFAULTS = {
   rewindIntervalSec: 20,
   rewindFrames: 8,
   pauseWhenIdleSec: 180,       // stop recording rewind frames when you're away
+
+  // Shadow mode (learns how you work; everything stays on this computer, encrypted)
+  shadowEnabled: false,
+  shadowFrames: true,          // a screen snapshot about once a minute when something changed
+  shadowRetentionDays: 14,
+  shadowNever: DEFAULT_NEVER_RECORD,
+  keyboardLayout: 'auto',      // 'auto' | 'uk' | 'us'
 
   // Windows
   pillPos: null,

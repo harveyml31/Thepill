@@ -14,7 +14,10 @@ const {
   nativeImage, shell, clipboard, session, systemPreferences, powerMonitor, nativeTheme,
 } = require('electron');
 const { Store } = require('./store');
-const { captureDisplays, Rewind, stamp } = require('./capture');
+const { captureDisplays, Rewind, stamp, fingerprint, difference } = require('./capture');
+const { Vault, dayOf } = require('./shadow/vault');
+const { Shadow } = require('./shadow/recorder');
+const digest = require('./shadow/digest');
 
 const IS_MAC = process.platform === 'darwin';
 const IS_WIN = process.platform === 'win32';
@@ -50,6 +53,8 @@ let settingsView = null;
 let settingsOpen = false;
 let settingsHideTimer = null;
 let tray = null;
+let vault = null;
+let shadow = null;
 let quitting = false;
 let overlayPx = 0;
 let viewReady = false;
@@ -175,6 +180,7 @@ function uiState() {
     settingsOpen,
     anchor: pillWin && cornerOf(pillWin.getBounds()).right ? 'right' : 'left',
     pillMode,
+    shadow: shadow ? shadow.status() : { enabled: !!s.shadowEnabled, running: false, mode: 'off', today: null },
     opacity: s.opacity,
     chatOpen: !!(chatWin && chatWin.isVisible()),
     url,
@@ -218,6 +224,9 @@ function applySettings(patch) {
     if (s.rewindEnabled && s.watching) rewind.start(); else rewind.stop({ clear: !s.rewindEnabled });
   }
   if ('rewindIntervalSec' in patch) rewind.restart();
+  if ('shadowEnabled' in patch && !!patch.shadowEnabled !== !!before.shadowEnabled) setShadow(!!patch.shadowEnabled);
+  if ('keyboardLayout' in patch && shadow && shadow.running) { shadow.stop(); shadow.start(); }
+  if ('shadowRetentionDays' in patch && vault) vault.prune(Number(s.shadowRetentionDays) || 14, 7);
   if ('pinned' in patch && chatWin) setChatOnTop(s.pinned);
   if ('opacity' in patch && chatWin && !IS_LINUX) chatWin.setOpacity(Math.min(1, Math.max(0.35, Number(s.opacity) || 1)));
   if ('hideSelfFromCapture' in patch) applyContentProtection();
@@ -667,6 +676,93 @@ function openClaudeLink(raw) {
   return true;
 }
 
+// ---------------------------------------------------------------- Shadow mode
+function ensureShadow() {
+  if (shadow) return shadow;
+  vault = new Vault(path.join(app.getPath('userData'), 'shadow'));
+  vault.prune(Number(store.get('shadowRetentionDays')) || 14, 7);
+  shadow = new Shadow({
+    getSettings: () => store.all(),
+    vault,
+    locale: app.getLocale(),
+    difference,
+    captureFrame: async () => {
+      const [s] = await captureDisplays({ which: 'cursor', maxEdge: 1280 });
+      return { jpeg: s.image.toJPEG(70), fp: fingerprint(s.image) };
+    },
+  });
+  shadow.on('status', () => broadcastState());
+  return shadow;
+}
+
+function setShadow(on, { quiet = false } = {}) {
+  if (on) {
+    if (IS_MAC && !systemPreferences.isTrustedAccessibilityClient(false)) {
+      systemPreferences.isTrustedAccessibilityClient(true); // shows the macOS prompt
+      store.set({ shadowEnabled: false });
+      toast('Allow The Pill in Privacy & Security → Accessibility and Input Monitoring, then turn Shadow mode on again', 'warn', { label: 'Open settings', id: 'access-settings' });
+      broadcastState();
+      return false;
+    }
+    try {
+      ensureShadow().start();
+      store.set({ shadowEnabled: true });
+      if (!quiet) toast('Shadow mode on: learning how you work. Passwords, login pages and calls are never recorded.', 'capture');
+    } catch (err) {
+      store.set({ shadowEnabled: false });
+      toast(`Couldn’t start Shadow mode: ${err.message}`, 'warn');
+    }
+  } else {
+    if (shadow) shadow.stop();
+    store.set({ shadowEnabled: false });
+    if (!quiet) toast('Shadow mode off. Nothing new is being recorded.', 'info');
+  }
+  broadcastState();
+  return !!store.get('shadowEnabled');
+}
+
+/** Opens a fresh chat with the recorded day (or week) attached and a prompt ready to send. */
+async function reviewWithClaude(kind = 'day') {
+  ensureShadow();
+  const days = kind === 'week' ? vault.days().slice(-7) : [dayOf()];
+  const files = [];
+  for (const d of days) {
+    const events = vault.readDay(d);
+    if (!events.length) continue;
+    const { markdown } = digest.dayMarkdown(d, events, { maxTyped: kind === 'week' ? 20000 : 60000 });
+    files.push({ name: `workday ${d}.md`, mime: 'text/markdown', data: Buffer.from(markdown, 'utf8') });
+  }
+  if (!files.length) {
+    toast('Nothing recorded yet. Turn on Shadow mode and work as normal for a while.', 'info');
+    return { ok: false, error: 'empty' };
+  }
+  viewReady = false;
+  claudeView.webContents.loadURL(urlFor('new'));
+  expand();
+  await waitForView();
+  const r = await attachToClaude(files, { hint: kind === 'week' ? digest.WEEK_PROMPT : digest.DAY_PROMPT, manual: true });
+  if (r.ok) toast(kind === 'week' ? 'Your week is attached. Press Enter to build your playbook.' : 'Today’s log is attached. Press Enter to get the review.', 'capture');
+  return r;
+}
+
+async function shadowAction(action, arg) {
+  ensureShadow();
+  switch (action) {
+    case 'pause': shadow.pause(Number(arg) || 15 * 60000); break;
+    case 'resume': shadow.pause(0); break;
+    case 'summary': return digest.summaryForUi(vault.readDay(dayOf()));
+    case 'review-day': return reviewWithClaude('day');
+    case 'review-week': return reviewWithClaude('week');
+    case 'delete-today': vault.deleteDay(dayOf()); shadow._reset(); toast('Today’s Shadow data deleted', 'info'); break;
+    case 'delete-all': vault.deleteAll(); shadow._reset(); toast('All Shadow data deleted', 'info'); break;
+    case 'open-folder': shell.openPath(vault.dir); break;
+    case 'storage': return { bytes: vault.sizeBytes(), days: vault.days().length, keyProtected: vault.keyProtected };
+    default: return null;
+  }
+  broadcastState();
+  return true;
+}
+
 // ---------------------------------------------------------------- menu / tray
 function buildMenu() {
   const s = store.all();
@@ -677,6 +773,10 @@ function buildMenu() {
     { label: 'Watch my screen', type: 'checkbox', checked: !!s.watching, accelerator: SHORTCUTS.toggleWatching, click: (m) => setWatching(m.checked) },
     { label: 'Share screen now', accelerator: SHORTCUTS.shareScreen, click: () => shareScreen() },
     { label: `Share Rewind${hasRewind ? ` (${rewind.frames.length})` : ''}`, enabled: !!s.watching && hasRewind, click: () => shareRewind() },
+    { type: 'separator' },
+    { label: 'Learn how I work (Shadow mode)', type: 'checkbox', checked: !!s.shadowEnabled, click: (m) => setShadow(m.checked) },
+    { label: 'Pause learning for 15 minutes', enabled: !!(shadow && shadow.running), click: () => shadowAction('pause', 15 * 60000) },
+    { label: 'Review my day with Claude', click: () => reviewWithClaude('day') },
     { type: 'separator' },
     { label: 'New chat', click: () => { claudeView.webContents.loadURL(urlFor('new')); expand(); } },
     { label: 'Open Claude link from clipboard', click: () => { if (!openClaudeLink(clipboard.readText())) toast('Copy a claude.ai chat link first', 'info'); } },
@@ -724,8 +824,10 @@ function wireIpc() {
   ipcMain.handle('ui:toggle-watching', () => { setWatching(!store.get('watching')); return uiState(); });
   ipcMain.handle('ui:share-screen', () => shareScreen());
   ipcMain.handle('ui:share-rewind', () => shareRewind());
-  ipcMain.handle('ui:open-screen-settings', () => {
-    if (IS_MAC) shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+  ipcMain.handle('ui:shadow', (_e, action, arg) => shadowAction(action, arg));
+  ipcMain.handle('ui:open-screen-settings', (_e, which) => {
+    if (IS_MAC && which === 'access-settings') shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
+    else if (IS_MAC) shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
     else if (IS_WIN) shell.openExternal('ms-settings:privacy');
   });
   ipcMain.handle('ui:nav', (_e, kind) => {
@@ -816,6 +918,7 @@ async function boot() {
   powerMonitor.on('resume', () => { rewind.paused = false; });
 
   if (store.get('watching') && store.get('rewindEnabled')) rewind.start();
+  if (store.get('shadowEnabled')) setShadow(true, { quiet: true });
 
   pillWin.once('ready-to-show', () => {
     if (store.get('firstRun')) {
@@ -838,10 +941,10 @@ async function boot() {
 }
 
 app.whenReady().then(() => (IS_LINUX ? new Promise((r) => setTimeout(r, 300)) : null)).then(boot);
-app.on('before-quit', () => { quitting = true; if (store) store.flush(); });
+app.on('before-quit', () => { quitting = true; if (shadow) shadow.stop(); if (store) store.flush(); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', (e) => { if (!quitting) e.preventDefault(); });
 
 module.exports = {
-  _internals: () => ({ toggleSettings, settingsView: () => settingsView, submitPrompt, setPillMode, pillMode: () => pillMode, pillWin, chatWin, claudeView, store, rewind, expand, collapse, shareScreen, shareRewind, setWatching, uiState, toggleDock }),
+  _internals: () => ({ setShadow, shadowAction, reviewWithClaude, shadow: () => shadow, vault: () => vault, toggleSettings, settingsView: () => settingsView, submitPrompt, setPillMode, pillMode: () => pillMode, pillWin, chatWin, claudeView, store, rewind, expand, collapse, shareScreen, shareRewind, setWatching, uiState, toggleDock }),
 };

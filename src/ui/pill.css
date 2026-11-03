@@ -122,6 +122,8 @@ body:not(.bar) .expanded { position: absolute; width: 0; padding: 0; margin: 0; 
 }
 .watching .aura { opacity: 1; animation: orbit 3.2s linear infinite; }
 @keyframes orbit { to { --angle: 360deg; } }
+.learning .rec { background: var(--clay); opacity: 1; animation: pulse 2.6s ease-in-out infinite; }
+.learning .sub { color: var(--clay); }
 .watching .rec { background: var(--watch); opacity: 1; animation: pulse 1.8s ease-in-out infinite; }
 .watching .sub { color: var(--watch); }
 .watching .eye { color: var(--watch); background: color-mix(in srgb, var(--watch) 14%, transparent); }

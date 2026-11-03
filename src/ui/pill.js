@@ -19,6 +19,9 @@ const isBar = () => body.classList.contains('bar');
 
 function baseSub() {
   if (!state) return '';
+  const sh = state.shadow || {};
+  if (!state.watching && sh.mode === 'recording') return 'Learning';
+  if (!state.watching && sh.mode === 'paused') return 'Learning paused';
   if (!state.watching) return 'Screen off';
   return state.rewindCount ? `Watching · ${state.rewindCount}` : 'Watching';
 }
@@ -36,6 +39,7 @@ function renderCam() {
 function render(s) {
   state = s;
   capsule.classList.toggle('watching', !!s.watching);
+  capsule.classList.toggle('learning', !s.watching && !!(s.shadow && s.shadow.mode === 'recording'));
   body.classList.toggle('anchor-left', s.anchor === 'left');
   eye.title = s.watching ? 'Stop watching my screen' : 'Watch my screen';
   eye.setAttribute('aria-pressed', String(!!s.watching));
