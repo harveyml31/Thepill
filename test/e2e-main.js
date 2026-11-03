@@ -18,7 +18,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 function check(name, ok, extra = '') { results.push({ name, ok }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  — ' + extra : ''}`); }
 
+// Screenshots are for review only; a GPU-less CI machine can fail to grab them, which isn't a test failure.
+async function snap(name) {
+  try { fs.writeFileSync(path.join(OUT, name), (await main._internals().pillWin.webContents.capturePage()).toPNG()); } catch (err) { console.log(`NOTE  screenshot ${name} skipped: ${err.message}`); }
+}
+
 async function shot(name) {
+  try { await shotInner(name); } catch (err) { console.log(`NOTE  screenshot ${name} skipped: ${err.message}`); }
+}
+async function shotInner(name) {
   const [s] = await captureDisplays({ which: 'primary', maxEdge: 1600 });
   fs.writeFileSync(path.join(OUT, name), s.image.toPNG());
 }
@@ -53,11 +61,11 @@ app.whenReady().then(async () => {
     I.collapse();
     await sleep(600);
     check('pill visible when collapsed', I.pillWin.isVisible() && !I.chatWin.isVisible());
-    fs.writeFileSync(path.join(OUT, 'pill-off.png'), (await I.pillWin.webContents.capturePage()).toPNG());
+    await snap('pill-off.png');
 
     I.setWatching(true);
     await sleep(500);
-    fs.writeFileSync(path.join(OUT, 'pill-watching.png'), (await I.pillWin.webContents.capturePage()).toPNG());
+    await snap('pill-watching.png');
 
     I.expand();
     await sleep(1200);
@@ -158,7 +166,7 @@ app.whenReady().then(async () => {
     const bar = I.pillWin.getBounds();
     check('click pill -> prompt bar grows in place', bar.width > p0.width + 200 && bar.x + bar.width === p0.x + p0.width && bar.y === p0.y, JSON.stringify({ p0, bar }));
     await shot('desktop-bar.png');
-    fs.writeFileSync(path.join(OUT, 'pill-bar.png'), (await I.pillWin.webContents.capturePage()).toPNG());
+    await snap('pill-bar.png');
     const before = (await sent(wc)).length;
     const r1 = await I.submitPrompt('Hello from the bar', false);
     s = await waitSent(wc, before + 1);
