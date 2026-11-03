@@ -1,0 +1,38 @@
+{
+  "name": "thepill",
+  "productName": "The Pill",
+  "version": "0.1.0",
+  "description": "A tiny always-on-top Claude pill that can see your screen. Click it and it becomes your real claude.ai chat.",
+  "main": "src/main.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "e2e": "electron test/e2e-main.js",
+    "icons": "python3 scripts/make-icons.py",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "44.9.0",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "app.thepill.desktop",
+    "productName": "The Pill",
+    "files": ["src/**/*", "assets/**/*", "package.json"],
+    "protocols": [{ "name": "The Pill", "schemes": ["thepill"] }],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.png",
+      "extendInfo": {
+        "NSScreenCaptureUsageDescription": "The Pill lets Claude see your screen, only while you have watching turned on or press Share screen.",
+        "NSMicrophoneUsageDescription": "Used only if you use Claude's voice mode."
+      }
+    },
+    "win": { "icon": "assets/icon.png", "target": ["nsis"] },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true },
+    "linux": { "icon": "assets/icon.png", "target": ["AppImage", "deb"], "category": "Utility" }
+  }
+}

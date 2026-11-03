@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Mock claude.ai</title>
+<style>
+  body { margin: 0; font: 14px system-ui; background: #262624; color: #eee; display: flex; flex-direction: column; height: 100vh; }
+  #log { flex: 1; overflow: auto; padding: 12px; }
+  .msg { background: #3a3936; border-radius: 10px; padding: 8px 10px; margin: 6px 0; }
+  .msg img { max-width: 100%; display: block; margin-top: 6px; border-radius: 6px; }
+  fieldset { border: 1px solid #555; border-radius: 14px; margin: 10px; padding: 8px; }
+  .ProseMirror { min-height: 40px; outline: none; }
+  .thumbs { display: flex; gap: 6px; }
+  .thumbs img { height: 48px; border-radius: 6px; }
+  button[disabled] { opacity: .4; }
+</style>
+</head>
+<body>
+<div id="log"></div>
+<fieldset>
+  <div class="thumbs" id="thumbs"></div>
+  <div class="ProseMirror" contenteditable="true" id="ed"></div>
+  <input type="file" id="file" multiple hidden accept="image/*,.pdf">
+  <button type="button" aria-label="Attach">📎</button>
+  <button type="button" aria-label="Send message" id="send" disabled>Send</button>
+</fieldset>
+<script>
+  // Mimics the parts of claude.ai's composer The Pill relies on.
+  window.__sent = [];
+  window.__attachVia = [];
+  const ed = document.getElementById('ed');
+  const send = document.getElementById('send');
+  const thumbs = document.getElementById('thumbs');
+  if (location.search.includes('nofile')) document.getElementById('file').remove();
+  let files = [];
+  let uploading = 0;
+  function sync() { send.disabled = uploading > 0 || (!ed.innerText.trim() && !files.length); }
+  function addFiles(list, via) {
+    for (const f of list) {
+      if (!f.type.startsWith('image/')) continue;
+      window.__attachVia.push(via);
+      uploading++; sync();
+      const url = URL.createObjectURL(f);
+      setTimeout(() => {
+        files.push({ name: f.name, url });
+        const img = document.createElement('img'); img.src = url; thumbs.appendChild(img);
+        uploading--; sync();
+      }, 600);
+    }
+  }
+  document.getElementById('file')?.addEventListener('change', (e) => addFiles(e.target.files, 'file-input'));
+  ed.addEventListener('paste', (e) => {
+    const fl = [...(e.clipboardData?.files || [])];
+    if (fl.length) { e.preventDefault(); addFiles(fl, 'paste'); }
+  });
+  ed.addEventListener('input', sync);
+  function doSend() {
+    if (send.disabled) return;
+    const text = ed.innerText.trim();
+    const div = document.createElement('div'); div.className = 'msg'; div.textContent = text;
+    for (const f of files) { const i = document.createElement('img'); i.src = f.url; div.appendChild(i); }
+    document.getElementById('log').appendChild(div);
+    window.__sent.push({ text, images: files.length, names: files.map((f) => f.name) });
+    ed.innerHTML = ''; files = []; thumbs.innerHTML = ''; sync();
+  }
+  send.addEventListener('click', doSend);
+  ed.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } });
+</script>
+</body>
+</html>

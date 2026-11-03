@@ -1,0 +1,90 @@
+:root {
+  --bg: rgba(31, 30, 29, 0.95);
+  --fg: #f5f4ee;
+  --muted: #b7b5a9;
+  --clay: #d97757;
+  --watch: #e5484d;
+  --line: rgba(255, 255, 255, 0.10);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body {
+  margin: 0; height: 100%; background: transparent; overflow: hidden;
+  font: 500 13px/1.1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  user-select: none; -webkit-user-select: none;
+}
+body { display: flex; align-items: center; padding: 0 4px; }
+svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+.pill {
+  position: relative; display: flex; align-items: center; gap: 6px;
+  width: 100%; height: 44px; padding: 0 6px 0 11px; border-radius: 22px;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  cursor: pointer; overflow: hidden;
+  transition: background 160ms ease;
+}
+.pill:hover { background: rgba(40, 39, 37, 0.97); }
+.pill.dragging { cursor: grabbing; }
+body.bar .pill { cursor: default; }
+
+.spark { width: 22px; height: 22px; flex: none; margin-right: 2px; transition: transform 600ms cubic-bezier(.2,.8,.2,1); }
+.spark line { stroke: var(--clay); stroke-width: 2.6; }
+.pill:hover .spark, body.bar .spark { transform: rotate(45deg); }
+
+.compact-only { display: flex; }
+.bar-only { display: none !important; }
+body.bar .compact-only { display: none !important; }
+body.bar .bar-only { display: flex !important; }
+
+.label { flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.title { font-weight: 650; letter-spacing: 0.01em; }
+.sub { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.ask { flex: 1; min-width: 0; }
+.ask input {
+  width: 100%; height: 30px; border: 0; outline: none; background: transparent; color: var(--fg);
+  font: 500 14px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; user-select: text;
+}
+.ask input::placeholder { color: var(--muted); }
+
+.btn {
+  flex: none; width: 30px; height: 30px; border-radius: 15px; border: 0; padding: 6px;
+  background: transparent; color: var(--muted); cursor: pointer;
+  display: grid; place-items: center; transition: background 120ms ease, color 120ms ease;
+}
+.btn:hover { background: rgba(255, 255, 255, 0.12); color: var(--fg); }
+.btn:focus-visible { outline: 2px solid var(--clay); outline-offset: 1px; }
+.btn svg { width: 17px; height: 17px; }
+.eye { background: rgba(255, 255, 255, 0.06); }
+.eye-pupil { fill: currentColor; }
+#cam[aria-pressed="true"] { color: var(--clay); background: rgba(217, 119, 87, 0.16); }
+#cam:disabled { cursor: default; }
+
+/* watching */
+.ring { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
+.watching .ring { box-shadow: inset 0 0 0 1.5px var(--watch); animation: breathe 2.4s ease-in-out infinite; }
+.watching .sub { color: #ff8b8e; }
+.watching .eye { background: var(--watch); color: #fff; }
+.watching .eye-slash { display: none; }
+.watching .sub::before {
+  content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 3px;
+  background: var(--watch); margin-right: 5px; vertical-align: 1px; animation: blink 1.6s ease-in-out infinite;
+}
+@keyframes breathe { 50% { box-shadow: inset 0 0 0 1.5px rgba(229, 72, 77, 0.35); } }
+@keyframes blink { 50% { opacity: 0.25; } }
+
+/* capture flash */
+.sheen {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.55) 50%, transparent 80%);
+  transform: translateX(-100%);
+}
+.flash .sheen { animation: sheen 700ms ease-out; }
+@keyframes sheen { 0% { opacity: 1; transform: translateX(-100%); } 100% { opacity: 0; transform: translateX(100%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .watching .ring, .watching .sub::before, .flash .sheen { animation: none; }
+  .spark, .pill { transition: none; }
+}

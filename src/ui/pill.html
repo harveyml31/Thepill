@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'">
+  <title>The Pill</title>
+  <link rel="stylesheet" href="pill.css">
+</head>
+<body>
+  <div id="pill" class="pill" title="Click to ask Claude · drag to move · right-click for more">
+    <span class="ring" aria-hidden="true"></span>
+    <svg class="spark" viewBox="0 0 24 24" aria-hidden="true"><g class="rays"></g></svg>
+
+    <!-- compact pill -->
+    <span class="label compact-only">
+      <span class="title">Claude</span>
+      <span id="sub" class="sub">Screen off</span>
+    </span>
+
+    <!-- prompt bar (opens in place) -->
+    <form id="ask" class="ask bar-only" autocomplete="off">
+      <input id="prompt" type="text" placeholder="Ask Claude…" aria-label="Ask Claude" spellcheck="true">
+    </form>
+    <button id="cam" class="btn bar-only" type="button" title="Include my screen with this question" aria-pressed="false">
+      <svg viewBox="0 0 24 24"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.4-2h5l1.4 2h1.6A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.4"/></svg>
+    </button>
+
+    <button id="eye" class="btn eye" type="button" aria-label="Toggle watching" title="Watch my screen">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path class="eye-shape" d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/>
+        <circle class="eye-pupil" cx="12" cy="12" r="3.2"/>
+        <path class="eye-slash" d="M4 4l16 16"/>
+      </svg>
+    </button>
+    <button id="open" class="btn bar-only" type="button" title="Open the full chat here">
+      <svg viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>
+    </button>
+    <button id="close" class="btn bar-only" type="button" title="Back to pill (Esc)">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+    <span class="sheen" aria-hidden="true"></span>
+  </div>
+  <script src="spark.js"></script>
+  <script src="pill.js"></script>
+</body>
+</html>
